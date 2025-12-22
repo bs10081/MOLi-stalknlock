@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MOLI 門禁註冊</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+  <div class="page-wrap">
+    <header class="moli-header">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <span>MOLI 門禁系統</span>
+      </div>
+      <div class="lab-tag">Makers' Open Lab for Innovation</div>
+    </header>
+
+    <main class="main-center">
+      <div class="card">
+        <div class="card-title">進出門禁註冊</div>
+        <div class="card-subtitle">
+          請先填寫學號與姓名，送出後依畫面指示刷學生證完成綁定。
+        </div>
+
+        <form id="registerForm">
+          <label for="student_id">學號</label>
+          <input type="text" id="student_id" name="student_id" required />
+
+          <label for="name">姓名</label>
+          <input type="text" id="name" name="name" required />
+
+          <button type="submit">送出註冊</button>
+          <div class="error" id="errorMsg"></div>
+        </form>
+      </div>
+    </main>
+    <footer class="moli-footer">
+      © MOLI – Makers' Open Lab for Innovation
+    </footer>
+  </div>
+
+  <div id="loadingModal" class="loading-modal">
+    <div class="loading-card">
+      <div class="modal-title" id="modalTitle">資料建立成功</div>
+
+      <div class="spinner" id="loadingSpinner"></div>
+      <div class="success-icon" id="successIcon" style="display: none;">✅</div>
+
+      <div class="scan-status" id="scanStatus">
+        請在 120 秒內至讀卡機刷卡...
+      </div>
+      <div id="successMsg" style="display:none; margin-top:10px; text-align:center;"></div>
+    </div>
+  </div>
+
+  <script>
+    // 接收後端傳來的 ngrok 網址
+    const PI_API_URL = "{{ pi_api_url }}";
+
+    document.getElementById("registerForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const form = e.target;
+      const student_id = form.student_id.value.trim();
+      const name = form.name.value.trim();
+      const errorMsg = document.getElementById("errorMsg");
+
+      if (!student_id || !name) {
+        errorMsg.textContent = "請填寫學號與姓名";
+        return;
+      }
+
+      errorMsg.textContent = "";
+      const formData = new FormData();
+      formData.append("student_id", student_id);
+      formData.append("name", name);
+
+      try {
+        const resp = await fetch("/register", { method: "POST", body: formData });
+
+        if (resp.ok) {
+          // 嘗試切換 Pi 為註冊模式
+          try {
+            if (PI_API_URL && PI_API_URL !== "None") {
+              const piResp = await fetch(`${PI_API_URL}/mode/register`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-API-KEY": "{{ api_key }}" },
+                body: JSON.stringify({ student_id: student_id })
+              });
+              if (!piResp.ok) {
+                console.error(`Pi 模式切換失敗: ${piResp.status} ${await piResp.text()}`);
+              } else {
+                console.log("Pi 模式切換成功");
+              }
+            }
+          } catch (piErr) {
+            console.error("讀卡機連線失敗", piErr);
+          }
+
+          document.getElementById("loadingModal").style.display = "block";
+          startPolling(student_id);
+
+        } else {
+          let msg = "註冊失敗";
+          try {
+            const errData = await resp.json();
+            msg = errData?.detail || errData?.message || JSON.stringify(errData);
+          } catch (parseErr) {
+            msg = await resp.text() || msg;
+          }
+          errorMsg.textContent = msg;
+        }
+      } catch (err) {
+        console.error(err);
+        errorMsg.textContent = "連線錯誤，請檢查網路";
+      }
+    });
+
+    function startPolling(student_id) {
+      const scanStatus = document.getElementById("scanStatus");
+      const successMsg = document.getElementById("successMsg");
+      const spinner = document.getElementById("loadingSpinner");
+      const successIcon = document.getElementById("successIcon");
+      const modalTitle = document.getElementById("modalTitle");
+
+      let attempts = 0;
+      const maxAttempts = 60; // 120 秒（每 2 秒輪詢一次）
+
+      const intervalId = setInterval(async () => {
+        attempts++;
+        try {
+          const res = await fetch(`/check_status/${student_id}`);
+          if (!res.ok) throw new Error("Status check failed");
+          const data = await res.json();
+
+          // === 成功判斷：優先 bound，其次 step_2 有 message ===
+          if (data.bound || (data.status === "step_2" && data.message) || data.currentStep === 2 && data.message) {
+            clearInterval(intervalId);
+            spinner.style.display = "none";
+            successIcon.style.display = "block";
+            successIcon.style.fontSize = "40px";
+            successIcon.style.margin = "10px auto";
+
+            modalTitle.textContent = "綁定完成！";
+            modalTitle.style.color = "#22c55e";
+
+            scanStatus.textContent = "歡迎進入 MOLI 實驗室";
+            scanStatus.style.fontWeight = "bold";
+            scanStatus.style.color = "#22c55e";
+
+            if (data.message) {
+              successMsg.textContent = data.message;
+              successMsg.style.display = "block";
+              successMsg.style.color = "#22c55e";
+            }
+
+            setTimeout(() => {
+              window.location.href = `/success?student_id=${encodeURIComponent(student_id)}`;
+            }, 1500);
+            return;
+          }
+
+          // === 第一次刷卡成功 ===
+          if (data.status === "step_1") {
+            scanStatus.textContent = "✅ 讀取成功！請使用此進行“第二次刷卡”確認...";
+            scanStatus.style.color = "#2563eb";
+            scanStatus.style.fontWeight = "bold";
+            successMsg.style.display = "none";
+          }
+
+          // === 進入 step_2（等待信箱點擊或第二次刷卡）===
+          else if (data.status === "step_2" || data.currentStep === 2) {
+            successMsg.innerHTML = `
+              <strong style="color:#2563eb;">${data.message || '請查收學校信箱'}</strong><br>
+              ${data.hint || ''}<br><br>
+              開啟信箱點擊「註冊連結」後，請再次刷卡完成綁定。
+            `;
+            successMsg.style.display = "block";
+          }
+
+          // === 逾時處理 ===
+          if (attempts >= maxAttempts) {
+            clearInterval(intervalId);
+            spinner.style.display = "none";
+            scanStatus.textContent = "❌ 刷卡逾時，請重新整理頁面再試。";
+            scanStatus.style.color = "red";
+            successMsg.style.display = "none";
+          }
+        } catch (e) {
+          console.error("輪詢錯誤", e);
+          clearInterval(intervalId);
+          spinner.style.display = "none";
+          scanStatus.textContent = "❌ 連線錯誤，請重新整理頁面再試。";
+          scanStatus.style.color = "red";
+        }
+      }, 2000);
+    }
+  </script>
+
+</body>
+
+</html>
