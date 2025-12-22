@@ -254,7 +254,7 @@
           const data = await res.json();
 
           // 檢查是否已綁定卡片（支援副卡檢測）
-          if (data.bound && data.card_count > data.initial_count) {
+          if (data.bound && (!data.binding_in_progress || (data.initial_count !== undefined && data.card_count > data.initial_count))) {
             clearInterval(intervalId);
             spinner.style.display = "none";
             successIcon.style.display = "block";
