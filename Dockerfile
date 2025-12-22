@@ -5,7 +5,12 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y     gcc     g++     make     linux-headers-generic     && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    make \
+    linux-headers-generic \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt .
@@ -14,17 +19,23 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY *.py ./
-COPY *.sql ./
+COPY app/ ./app/
+COPY templates/ ./templates/
+COPY static/ ./static/
 
 # Create data directory for database
 RUN mkdir -p /app/data
 
 # Environment variables
-ENV PYTHONUNBUFFERED=1     DB_FILE=/app/data/moli_door.db     DOOR_LOG_FILE=/app/door_system.log     LOCK_PIN=16     LOCK_ACTIVE_LEVEL=1
+ENV PYTHONUNBUFFERED=1 \
+    DATABASE_URL=sqlite:///./data/moli_door.db \
+    LOCK_PIN=16 \
+    LOCK_ACTIVE_LEVEL=1 \
+    LOCK_DURATION=3 \
+    REGISTER_TIMEOUT=90
 
-# Expose Flask port
-EXPOSE 5001
+# Expose FastAPI port
+EXPOSE 8000
 
-# Run the door system
-CMD ["python", "door_system.py"]
+# Run the FastAPI app with uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
