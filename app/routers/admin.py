@@ -273,3 +273,39 @@ async def get_access_logs(
         })
     
     return result
+
+@router.put("/users/{user_id}")
+async def update_user(
+    user_id: str,
+    name: str = Form(...),
+    student_id: str = Form(...),
+    background_tasks: BackgroundTasks = None,
+    admin_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """修改用戶姓名和學號"""
+    current_admin = get_current_admin(admin_token)
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "用戶不存在")
+
+    # 檢查學號是否重複
+    if student_id != user.student_id:
+        existing = db.query(User).filter(
+            User.student_id == student_id,
+            User.id != user_id
+        ).first()
+        if existing:
+            raise HTTPException(400, "學號已被使用")
+
+    old_name = user.name
+    old_student_id = user.student_id
+    
+    user.name = name
+    user.student_id = student_id
+    db.commit()
+    
+    log.info(f"✏️ Admin {current_admin['name']} updated user: {old_name} ({old_student_id}) → {name} ({student_id})")
+    
+    return {"message": "用戶資料已更新"}

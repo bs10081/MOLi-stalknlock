@@ -5,6 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MOLi 門禁管理系統</title>
     <style>
+        /* CSS Variables */
+        :root {
+            --bg-primary: #f5f5f5;
+            --bg-card: #ffffff;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --border-color: #e0e0e0;
+            --accent: #2563eb;
+            --danger: #dc2626;
+            --success: #16a34a;
+            --space-2: 8px;
+            --space-3: 12px;
+            --space-4: 16px;
+            --space-6: 24px;
+            --space-8: 32px;
+            --radius-sm: 4px;
+            --radius-md: 6px;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,217 +31,356 @@
         }
 
         body {
-            font-family: 'Microsoft JhengHei', 'Noto Sans TC', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft JhengHei', 'Noto Sans TC', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
+            padding: var(--space-6);
         }
 
+        /* Header */
         .header {
-            background: white;
-            border-radius: 15px;
-            padding: 20px 30px;
-            margin-bottom: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: var(--space-4) var(--space-6);
+            margin-bottom: var(--space-6);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
         }
 
         .header h1 {
-            color: #333;
-            font-size: 28px;
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
         }
 
         .header-actions {
             display: flex;
-            gap: 10px;
+            gap: var(--space-2);
         }
 
+        /* Buttons */
         .btn {
-            padding: 10px 20px;
+            padding: var(--space-2) var(--space-4);
             border: none;
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
             font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: opacity 0.2s;
             text-decoration: none;
             display: inline-block;
         }
 
-        .btn-primary {
-            background: #667eea;
-            color: white;
+        .btn:hover {
+            opacity: 0.9;
         }
 
-        .btn-primary:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
+        .btn-primary {
+            background: var(--accent);
+            color: white;
         }
 
         .btn-danger {
-            background: #e74c3c;
+            background: var(--danger);
             color: white;
-        }
-
-        .btn-danger:hover {
-            background: #c0392b;
         }
 
         .btn-success {
-            background: #2ecc71;
+            background: var(--success);
             color: white;
         }
 
-        .btn-success:hover {
-            background: #27ae60;
+        .btn-secondary {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
         }
 
-        .btn-small {
-            padding: 5px 10px;
+        .btn-sm {
+            padding: 4px var(--space-2);
             font-size: 12px;
         }
 
+        /* Section */
         .section {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: var(--space-6);
+            margin-bottom: var(--space-6);
         }
 
         .section h2 {
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 22px;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: var(--space-4);
+            padding-bottom: var(--space-3);
+            border-bottom: 2px solid var(--border-color);
         }
 
+        /* Table */
         table {
             width: 100%;
             border-collapse: collapse;
         }
 
         th {
-            background: #f8f9fa;
-            padding: 12px;
+            background: var(--bg-primary);
+            padding: var(--space-3);
             text-align: left;
             font-weight: 600;
-            color: #555;
+            font-size: 13px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
         }
 
         td {
-            padding: 12px;
-            border-bottom: 1px solid #eee;
+            padding: var(--space-3);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
         }
 
         tr:hover {
-            background: #f8f9fa;
+            background: var(--bg-primary);
         }
 
+        /* Form */
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: var(--space-4);
         }
 
         .form-group label {
             display: block;
-            margin-bottom: 5px;
-            color: #555;
+            margin-bottom: var(--space-2);
+            font-size: 13px;
             font-weight: 500;
+            color: var(--text-secondary);
         }
 
         .form-group input {
             width: 100%;
-            padding: 10px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
+            padding: var(--space-2) var(--space-3);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
             font-size: 14px;
         }
 
         .form-group input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: var(--accent);
         }
 
+        .form-row {
+            display: flex;
+            gap: var(--space-3);
+            margin-bottom: var(--space-3);
+        }
+
+        .form-row label {
+            flex: 0 0 80px;
+            padding-top: var(--space-2);
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        .form-row input {
+            flex: 1;
+            padding: var(--space-2) var(--space-3);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+        }
+
+        /* Grid */
         .grid-2 {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            gap: var(--space-6);
         }
 
-        .card-list {
-            background: #f8f9fa;
-            padding: 10px;
-            margin-top: 5px;
-            border-radius: 5px;
+        /* Message */
+        .message {
+            padding: var(--space-3) var(--space-4);
+            border-radius: var(--radius-sm);
+            margin-bottom: var(--space-4);
+            display: none;
+            font-size: 14px;
         }
 
-        .card-item {
-            background: white;
-            padding: 8px;
-            margin-bottom: 5px;
-            border-radius: 5px;
+        .message.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+        }
+
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            border-radius: var(--radius-md);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-header {
+            padding: var(--space-4) var(--space-6);
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
-        .message {
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            display: none;
+        .modal-header h3 {
+            font-size: 18px;
+            font-weight: 600;
         }
 
-        .message.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .message.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+        .modal-close:hover {
+            color: var(--text-primary);
         }
 
+        .modal-body {
+            padding: var(--space-6);
+        }
+
+        .modal-footer {
+            padding: var(--space-4) var(--space-6);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--space-2);
+        }
+
+        /* Card List */
+        .card-list {
+            margin-top: var(--space-4);
+        }
+
+        .card-item {
+            padding: var(--space-3);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            margin-bottom: var(--space-2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-item strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .card-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .nickname {
+            color: var(--accent);
+            font-size: 13px;
+            margin-left: var(--space-2);
+        }
+
+        /* Admin List */
+        .admin-item {
+            background: var(--bg-primary);
+            padding: var(--space-3);
+            border-radius: var(--radius-sm);
+            margin-bottom: var(--space-2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .admin-item strong {
+            display: block;
+        }
+
+        .admin-item-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Loading */
         .loading {
             text-align: center;
-            padding: 20px;
-            color: #999;
+            padding: var(--space-8);
+            color: var(--text-secondary);
         }
 
+        /* Responsive */
         @media (max-width: 768px) {
             .grid-2 {
                 grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: var(--space-4);
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- Header -->
         <div class="header">
-            <h1>🔐 MOLi 門禁管理系統</h1>
+            <h1>MOLi 門禁管理系統</h1>
             <div class="header-actions">
-                <button class="btn btn-success" onclick="remoteUnlock()">🚪 遠程開門</button>
-                <a href="/" class="btn btn-primary">返回註冊頁</a>
+                <button class="btn btn-success" onclick="remoteUnlock()">遠程開門</button>
+                <a href="/" class="btn btn-secondary">返回註冊頁</a>
                 <form action="/logout" method="POST" style="display:inline;">
                     <button type="submit" class="btn btn-danger">登出</button>
                 </form>
             </div>
         </div>
 
+        <!-- Message -->
         <div id="message" class="message"></div>
 
-        <!-- 用戶管理 -->
+        <!-- User Management -->
         <div class="section">
-            <h2>👥 用戶管理</h2>
+            <h2>用戶管理</h2>
             <table>
                 <thead>
                     <tr>
@@ -230,7 +388,7 @@
                         <th>姓名</th>
                         <th>卡片數</th>
                         <th>註冊時間</th>
-                        <th>操作</th>
+                        <th style="width: 180px;">操作</th>
                     </tr>
                 </thead>
                 <tbody id="userTable">
@@ -239,11 +397,11 @@
             </table>
         </div>
 
-        <!-- 管理員與存取記錄 -->
+        <!-- Admin & Logs Grid -->
         <div class="grid-2">
-            <!-- 管理員管理 -->
+            <!-- Admin Management -->
             <div class="section">
-                <h2>👤 管理員</h2>
+                <h2>管理員</h2>
                 <form id="addAdminForm" onsubmit="createAdmin(event)">
                     <div class="form-group">
                         <label>帳號</label>
@@ -259,29 +417,65 @@
                     </div>
                     <button type="submit" class="btn btn-primary">新增管理員</button>
                 </form>
-                <div id="adminList" style="margin-top: 20px;"></div>
+                <div id="adminList" style="margin-top: var(--space-6);"></div>
             </div>
 
-            <!-- 存取記錄 -->
+            <!-- Access Logs -->
             <div class="section">
-                <h2>📊 存取記錄（最近50筆）</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>時間</th>
-                            <th>姓名</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="logTable">
-                        <tr><td colspan="3" class="loading">載入中...</td></tr>
-                    </tbody>
-                </table>
+                <h2>存取記錄（最近50筆）</h2>
+                <div style="max-height: 400px; overflow-y: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>時間</th>
+                                <th>姓名</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logTable">
+                            <tr><td colspan="3" class="loading">載入中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Modal -->
+    <div id="modal" class="modal-overlay" onclick="if(event.target===this) closeModal()">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">標題</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer" id="modalFooter"></div>
+        </div>
+    </div>
+
     <script>
+        // Modal Functions
+        function openModal(title, bodyHTML, footerHTML = '') {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalBody').innerHTML = bodyHTML;
+            document.getElementById('modalFooter').innerHTML = footerHTML;
+            document.getElementById('modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        function confirmAction(message, callback) {
+            const bodyHTML = `<p>${message}</p>`;
+            const footerHTML = `
+                <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+                <button class="btn btn-danger" onclick="(${callback})(); closeModal();">確認</button>
+            `;
+            openModal('確認操作', bodyHTML, footerHTML);
+        }
+
+        // Message Function
         function showMessage(text, type = 'success') {
             const msg = document.getElementById('message');
             msg.textContent = text;
@@ -292,26 +486,27 @@
             }, 3000);
         }
 
+        // Load Users
         async function loadUsers() {
             try {
                 const res = await fetch('/admin/users');
                 const users = await res.json();
-                
+
                 const tbody = document.getElementById('userTable');
                 if (users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">尚無用戶</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: #999;">尚無用戶</td></tr>';
                     return;
                 }
-                
+
                 tbody.innerHTML = users.map(u => `
                     <tr>
                         <td>${u.student_id}</td>
                         <td>${u.name}</td>
                         <td>${u.card_count}</td>
-                        <td>${new Date(u.created_at).toLocaleString('zh-TW')}</td>
+                        <td style="font-size: 12px;">${new Date(u.created_at).toLocaleString('zh-TW')}</td>
                         <td>
-                            <button class="btn btn-primary btn-small" onclick="showCards('${u.id}', '${u.name}')">查看卡片</button>
-                            <button class="btn btn-danger btn-small" onclick="deleteUser('${u.id}', '${u.name}')">刪除</button>
+                            <button class="btn btn-primary btn-sm" onclick="showUserDetail('${u.id}')">詳情</button>
+                            <button class="btn btn-danger btn-sm" onclick="confirmDeleteUser('${u.id}', '${u.name}')">刪除</button>
                         </td>
                     </tr>
                 `).join('');
@@ -321,33 +516,89 @@
             }
         }
 
-        async function showCards(userId, userName) {
+        // Show User Detail Modal
+        async function showUserDetail(userId) {
             try {
-                const res = await fetch(`/admin/users/${userId}/cards`);
-                const cards = await res.json();
-                
-                if (cards.length === 0) {
-                    alert(`${userName} 尚未綁定卡片`);
-                    return;
-                }
-                
-                const cardList = cards.map(c => 
-                    `RFID: ${c.rfid_uid}${c.nickname ? ' (' + c.nickname + ')' : ''} - ${new Date(c.created_at).toLocaleString('zh-TW')}`
-                ).join('\n');
-                
-                alert(`${userName} 的卡片:\n\n${cardList}`);
+                const [usersRes, cardsRes] = await Promise.all([
+                    fetch('/admin/users'),
+                    fetch(`/admin/users/${userId}/cards`)
+                ]);
+                const users = await usersRes.json();
+                const cards = await cardsRes.json();
+                const user = users.find(u => u.id === userId);
+
+                const bodyHTML = `
+                    <form id="editUserForm" onsubmit="updateUser(event, '${userId}')">
+                        <div class="form-row">
+                            <label>學號</label>
+                            <input type="text" name="student_id" value="${user.student_id}" required>
+                        </div>
+                        <div class="form-row">
+                            <label>姓名</label>
+                            <input type="text" name="name" value="${user.name}" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">儲存變更</button>
+                    </form>
+                    <hr style="margin: var(--space-6) 0; border: none; border-top: 1px solid var(--border-color);">
+                    <h4 style="margin-bottom: var(--space-3);">卡片列表 (${cards.length} 張)</h4>
+                    <div class="card-list">
+                        ${cards.length === 0 ? '<p style="color: #999; text-align: center; padding: var(--space-4);">尚無卡片</p>' : cards.map(c => `
+                            <div class="card-item">
+                                <div>
+                                    <strong>${c.rfid_uid}</strong>
+                                    ${c.nickname ? `<span class="nickname">(${c.nickname})</span>` : ''}
+                                    <div class="card-time">${new Date(c.created_at).toLocaleString('zh-TW')}</div>
+                                </div>
+                                <button class="btn btn-sm btn-danger" onclick="confirmDeleteCard('${c.id}', '${c.rfid_uid}')">刪除</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+
+                openModal(`用戶詳情：${user.name}`, bodyHTML);
             } catch (err) {
-                showMessage('載入卡片失敗', 'error');
+                console.error('Failed to load user detail:', err);
+                showMessage('載入用戶詳情失敗', 'error');
             }
         }
 
+        // Update User
+        async function updateUser(event, userId) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+
+            try {
+                const res = await fetch(`/admin/users/${userId}`, {
+                    method: 'PUT',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    showMessage(data.message, 'success');
+                    closeModal();
+                    loadUsers();
+                } else {
+                    showMessage(data.detail || '更新失敗', 'error');
+                }
+            } catch (err) {
+                showMessage('更新失敗', 'error');
+            }
+        }
+
+        // Confirm Delete User
+        function confirmDeleteUser(userId, userName) {
+            const message = `確定要刪除用戶「${userName}」嗎？<br><br>此操作將同時刪除該用戶的所有卡片！`;
+            const callback = `deleteUser('${userId}', '${userName}')`;
+            confirmAction(message, callback);
+        }
+
+        // Delete User
         async function deleteUser(userId, userName) {
-            if (!confirm(`確定要刪除用戶「${userName}」嗎？\n此操作將同時刪除該用戶的所有卡片！`)) return;
-            
             try {
                 const res = await fetch(`/admin/users/${userId}`, { method: 'DELETE' });
                 const data = await res.json();
-                
+
                 if (res.ok) {
                     showMessage(data.message, 'success');
                     loadUsers();
@@ -359,19 +610,46 @@
             }
         }
 
+        // Confirm Delete Card
+        function confirmDeleteCard(cardId, cardUid) {
+            const message = `確定要刪除卡片「${cardUid}」嗎？`;
+            const callback = `deleteCard('${cardId}')`;
+            confirmAction(message, callback);
+        }
+
+        // Delete Card
+        async function deleteCard(cardId) {
+            try {
+                const res = await fetch(`/admin/cards/${cardId}`, { method: 'DELETE' });
+                const data = await res.json();
+
+                if (res.ok) {
+                    showMessage(data.message, 'success');
+                    closeModal();
+                    loadUsers();
+                } else {
+                    showMessage(data.detail || '刪除失敗', 'error');
+                }
+            } catch (err) {
+                showMessage('刪除失敗', 'error');
+            }
+        }
+
+        // Load Admins
         async function loadAdmins() {
             try {
                 const res = await fetch('/admin/admins');
                 const admins = await res.json();
-                
+
                 const list = document.getElementById('adminList');
-                list.innerHTML = '<h3 style="margin-bottom:10px;">目前管理員</h3>' + admins.map(a => `
-                    <div style="background:#f8f9fa;padding:10px;margin-bottom:5px;border-radius:5px;display:flex;justify-content:space-between;align-items:center;">
+                list.innerHTML = '<h3 style="margin-bottom: var(--space-3); font-size: 14px; font-weight: 600;">目前管理員</h3>' + admins.map(a => `
+                    <div class="admin-item">
                         <div>
-                            <strong>${a.name}</strong> (${a.username})
-                            <div style="font-size:12px;color:#999;">${new Date(a.created_at).toLocaleString('zh-TW')}</div>
+                            <strong>${a.name}</strong>
+                            <span style="color: #999; font-size: 13px;"> (${a.username})</span>
+                            <div class="admin-item-time">${new Date(a.created_at).toLocaleString('zh-TW')}</div>
                         </div>
-                        <button class="btn btn-danger btn-small" onclick="deleteAdmin('${a.id}', '${a.name}')">刪除</button>
+                        <button class="btn btn-danger btn-sm" onclick="confirmDeleteAdmin('${a.id}', '${a.name}')">刪除</button>
                     </div>
                 `).join('');
             } catch (err) {
@@ -379,21 +657,21 @@
             }
         }
 
+        // Create Admin
         async function createAdmin(event) {
             event.preventDefault();
-            const form = event.target;
-            const formData = new FormData(form);
-            
+            const formData = new FormData(event.target);
+
             try {
                 const res = await fetch('/admin/admins', {
                     method: 'POST',
                     body: formData
                 });
                 const data = await res.json();
-                
+
                 if (res.ok) {
                     showMessage(data.message, 'success');
-                    form.reset();
+                    event.target.reset();
                     loadAdmins();
                 } else {
                     showMessage(data.detail || '新增失敗', 'error');
@@ -403,13 +681,19 @@
             }
         }
 
+        // Confirm Delete Admin
+        function confirmDeleteAdmin(adminId, adminName) {
+            const message = `確定要刪除管理員「${adminName}」嗎？`;
+            const callback = `deleteAdmin('${adminId}', '${adminName}')`;
+            confirmAction(message, callback);
+        }
+
+        // Delete Admin
         async function deleteAdmin(adminId, adminName) {
-            if (!confirm(`確定要刪除管理員「${adminName}」嗎？`)) return;
-            
             try {
                 const res = await fetch(`/admin/admins/${adminId}`, { method: 'DELETE' });
                 const data = await res.json();
-                
+
                 if (res.ok) {
                     showMessage(data.message, 'success');
                     loadAdmins();
@@ -421,22 +705,23 @@
             }
         }
 
+        // Load Logs
         async function loadLogs() {
             try {
                 const res = await fetch('/admin/logs');
                 const logs = await res.json();
-                
+
                 const tbody = document.getElementById('logTable');
                 if (logs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">尚無記錄</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: #999;">尚無記錄</td></tr>';
                     return;
                 }
-                
+
                 tbody.innerHTML = logs.map(l => `
                     <tr>
                         <td style="font-size:12px;">${new Date(l.timestamp).toLocaleString('zh-TW')}</td>
                         <td>${l.user_name}</td>
-                        <td>${l.action === 'entry' ? '🚪 進門' : '📝 綁定'}</td>
+                        <td>${l.action === 'entry' ? '進門' : '綁定'}</td>
                     </tr>
                 `).join('');
             } catch (err) {
@@ -444,15 +729,20 @@
             }
         }
 
-        async function remoteUnlock() {
-            if (!confirm('確定要遠程開啟門鎖嗎？')) return;
-            
+        // Remote Unlock
+        function remoteUnlock() {
+            const message = '確定要遠程開啟門鎖嗎？';
+            const callback = 'executeRemoteUnlock';
+            confirmAction(message, callback);
+        }
+
+        async function executeRemoteUnlock() {
             try {
                 const res = await fetch('/admin/door/unlock', { method: 'POST' });
                 const data = await res.json();
-                
+
                 if (res.ok) {
-                    showMessage('✅ ' + data.message, 'success');
+                    showMessage(data.message, 'success');
                 } else {
                     showMessage(data.detail || '開門失敗', 'error');
                 }
@@ -461,12 +751,12 @@
             }
         }
 
-        // 初始化載入
+        // Initialize
         loadUsers();
         loadAdmins();
         loadLogs();
 
-        // 每30秒自動刷新
+        // Auto refresh every 30 seconds
         setInterval(() => {
             loadUsers();
             loadLogs();
