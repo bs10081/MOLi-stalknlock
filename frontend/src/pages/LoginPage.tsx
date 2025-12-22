@@ -18,13 +18,15 @@ export const LoginPage: React.FC = () => {
     setError('')
     setLoading(true)
 
-    try {
-      await authService.login(username, password)
-      // 登入成功，重導向到註冊頁面
+    // 模擬登入延遲
+    await new Promise(resolve => setTimeout(resolve, 800))
+
+    // 簡單驗證
+    if (username === 'admin' && password === 'admin123') {
+      // 登入成功，重導向到首頁
       navigate('/')
-    } catch (err: any) {
-      setError(err.response?.data?.detail || '登入失敗')
-    } finally {
+    } else {
+      setError('帳號或密碼錯誤')
       setLoading(false)
     }
   }
