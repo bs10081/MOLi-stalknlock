@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: import.meta.env.DEV ? '' : '',
+  baseURL: 'http://localhost:8000',  // 直接連接後端，不使用 proxy
   withCredentials: true, // 自動攜帶 cookie
   headers: {
     'Content-Type': 'application/json',
