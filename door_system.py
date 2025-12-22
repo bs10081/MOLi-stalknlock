@@ -27,7 +27,8 @@ LOCK_PIN = 16
 LOCK_ACTIVE_LEVEL = int(os.getenv('LOCK_ACTIVE_LEVEL', '1')) 
 
 # RFID 裝置路徑
-RFID_DEVICE_PATH = '/dev/input/event9' 
+# 使用穩定的 by-id 路徑，避免設備順序變化
+RFID_DEVICE_PATH = '/dev/input/by-id/usb-Sycreader_RFID_Technology_Co.__Ltd_SYC_ID_IC_USB_Reader_08FF20140315-event-kbd' 
 
 # ================= Logging 設定 =================
 logging.basicConfig(
