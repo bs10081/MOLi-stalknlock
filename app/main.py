@@ -7,9 +7,10 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from app.routers import api, web, admin
 
 from app.database import init_db, get_db, User, Card, RegistrationSession, AccessLog
-from app.routers import api, web
+
 from app.services.rfid_reader import rfid_reader
 from app.services.gpio_control import open_lock, deny_access
 from app.services.telegram import send_telegram
@@ -213,6 +214,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Register routers
 app.include_router(web.router)
+app.include_router(admin.router)
 app.include_router(api.router)
 
 # Endpoint to switch to registration mode (called by web frontend)

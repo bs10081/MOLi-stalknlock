@@ -205,3 +205,16 @@ async def success(request: Request, student_id: str, db: Session = Depends(get_d
         "user": user,
         "card_count": card_count
     })
+
+@router.get("/admin/dashboard", response_class=HTMLResponse)
+async def admin_dashboard(request: Request, admin_token: Optional[str] = Cookie(None)):
+    """管理員控制台"""
+    current_admin = get_current_admin(admin_token)
+    
+    if not current_admin:
+        return RedirectResponse(url="/", status_code=302)
+    
+    return templates.TemplateResponse("admin/dashboard.html", {
+        "request": request,
+        "admin": current_admin
+    })

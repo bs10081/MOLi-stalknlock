@@ -34,3 +34,7 @@ def verify_access_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+def hash_password(password: str) -> str:
+    """Hash a plain password using bcrypt"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
