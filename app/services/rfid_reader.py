@@ -20,6 +20,7 @@ class RFIDReader:
         self.device_path = RFID_DEVICE_PATH
         self.current_code = ""
         self.callback: Optional[Callable] = None
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
     
     def initialize_device(self) -> bool:
         """Initialize RFID device"""
@@ -59,12 +60,12 @@ class RFIDReader:
             return
         
         self.callback = callback
+        self.loop = asyncio.get_event_loop()
         log.info("RFID reader loop started")
         
         try:
             # Run blocking read_loop in executor
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self._blocking_read_loop)
+            await self.loop.run_in_executor(None, self._blocking_read_loop)
         except Exception as e:
             log.error(f"RFID read loop error: {e}")
     
@@ -74,8 +75,11 @@ class RFIDReader:
             if event.type == ecodes.EV_KEY and event.value == 1:  # Key down
                 if event.code == 28:  # Enter key
                     if self.current_code:
-                        # Schedule callback in event loop
-                        asyncio.create_task(self.callback(self.current_code))
+                        # Schedule callback in main event loop
+                        asyncio.run_coroutine_threadsafe(
+                            self.callback(self.current_code),
+                            self.loop
+                        )
                         self.current_code = ""
                 elif event.code in SCANCODE_MAP:
                     self.current_code += SCANCODE_MAP[event.code]

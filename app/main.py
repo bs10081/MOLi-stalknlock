@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.database import init_db, get_db, User, RegistrationSession
+from app.database import init_db, get_db, User, RegistrationSession, AccessLog
 from app.routers import api, web
 from app.services.rfid_reader import rfid_reader
 from app.services.gpio_control import open_lock, deny_access
@@ -48,11 +48,23 @@ async def handle_normal_mode(card_uid: str):
         if user:
             log.info(f"✅ Access granted: {user.name} ({user.student_id})")
             
-            # Open lock in background
-            asyncio.create_task(asyncio.to_thread(open_lock))
+            # 第一優先級：立即開門（同步執行，不等待）
+            open_lock()
             
-            # Send notification
-            send_telegram(f"歡迎！{user.name} ({user.student_id}) 已進入實驗室")
+            # 背景任務：記錄和通知（不阻塞）
+            async def background_tasks():
+                # 資料庫寫入
+                try:
+                    db.add(AccessLog(user_id=user.id, rfid_uid=card_uid, action="entry"))
+                    db.commit()
+                except Exception as e:
+                    log.error(f"Failed to log access: {e}")
+                
+                # Telegram 通知（非阻塞）
+                await asyncio.to_thread(send_telegram, f"歡迎！{user.name} ({user.student_id}) 已進入實驗室")
+            
+            # 在背景執行任務
+            asyncio.create_task(background_tasks())
         else:
             log.warning(f"⚠️ Unknown card: {card_uid}")
             deny_access()
@@ -96,7 +108,8 @@ async def handle_register_mode(card_uid: str):
             
             if existing:
                 log.warning(f"⚠️ Card already bound to {existing.student_id}")
-                send_telegram(f"⚠️ 綁定失敗：卡片已被 {existing.student_id} 使用")
+                # Telegram 通知改為非阻塞
+                asyncio.create_task(asyncio.to_thread(send_telegram, f"⚠️ 綁定失敗：卡片已被 {existing.student_id} 使用"))
                 return
             
             session.first_uid = card_uid
@@ -113,10 +126,12 @@ async def handle_register_mode(card_uid: str):
                 db.commit()
                 
                 log.info(f"🎉 Card bound: {user.student_id} -> {card_uid}")
-                send_telegram(f"綁定成功：{user.name} ({user.student_id})")
                 
-                # Open lock as celebration
-                asyncio.create_task(asyncio.to_thread(open_lock))
+                # 立即開門慶祝
+                open_lock()
+                
+                # Telegram 通知改為非阻塞
+                asyncio.create_task(asyncio.to_thread(send_telegram, f"綁定成功：{user.name} ({user.student_id})"))
                 
                 # Return to normal mode
                 app_state["mode"] = "NORMAL"
