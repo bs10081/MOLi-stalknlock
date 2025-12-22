@@ -158,7 +158,7 @@ MOLi-stalknlock 是一個結合後端與前端的專案，主要用途為（填�
 
 授權
 ---
-請在此填入專案授權（例如 MIT、Apache-2.0 等）。若尚未決定，建議新增 `LICENSE` 檔案並標註授權條款。
+MIT
 
 聯絡方式
 ---
@@ -174,9 +174,3 @@ MOLi-stalknlock 是一個結合後端與前端的專案，主要用途為（填�
      git sparse-checkout set files/front
 2. 將取得的 `files/front` 內容移到本 repo 的 `frontend/`。
 3. 在 `frontend/` 執行 `npm install` 並根據上方說明啟動或建置。
-
-自訂與補充
----
-若你提供 `files/front` 的具體檔案清單或說明（例如使用的前端框架：React / Vue / Svelte、是否有 server-side rendering、需要哪些 env 變數），我可以把本 README 調整為更精準、包含範例 env、腳本與部署範本（例如 GitHub Actions 或 docker-compose 範例）。
-
-感謝貢獻與使用，若要我直接產生 `.env.example`、docker-compose.yml 或 GitHub Actions Workflow，也請告訴我你偏好的部署方式。
