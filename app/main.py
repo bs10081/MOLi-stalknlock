@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from app.routers import api, web, admin
@@ -207,6 +208,18 @@ app = FastAPI(
     description="FastAPI-based door access control system with web UI",
     version="2.0.0",
     lifespan=lifespan
+)
+
+# Add CORS middleware for React SPA
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:8000",
+    ],
+    allow_credentials=True,  # 必須，讓 cookie 能被傳送
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Mount static files

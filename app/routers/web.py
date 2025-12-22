@@ -79,6 +79,14 @@ async def logout(response: Response):
     response.delete_cookie(key="admin_token")
     return response
 
+@router.get("/me")
+async def get_current_user(admin_token: Optional[str] = Cookie(None)):
+    """檢查當前登入狀態"""
+    admin = get_current_admin(admin_token)
+    if not admin:
+        raise HTTPException(status_code=401, detail="未登入")
+    return admin
+
 @router.post("/register")
 async def register_post(
     request: Request,
