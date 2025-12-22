@@ -71,7 +71,7 @@ async def handle_normal_mode(card_uid: str):
                     log.error(f"Failed to log access: {e}")
                 
                 # Telegram 通知（非阻塞）
-                message = f"歡迎！{user.name} ({user.student_id}) 已進入實驗室{card_info}"
+                message = f"歡迎！{user.name} ({user.student_id}) 解鎖門禁{card_info}"
                 await asyncio.to_thread(send_telegram, message)
             
             # 在背景執行任務

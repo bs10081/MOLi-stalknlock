@@ -92,7 +92,7 @@ async def api_scan(request: Request, db: Session = Depends(get_db)):
     if user:
         db.add(AccessLog(student_id=user.student_id, rfid_uid=rfid_uid, action="entry"))
         db.commit()
-        send_telegram(f"歡迎！{user.name} ({user.student_id}) 已進入實驗室")
+        send_telegram(f"歡迎！{user.name} ({user.student_id}) 解鎖門禁")
         return {"status": "allow", "student_id": user.student_id, "name": user.name}
     return {"status": "deny"}
 

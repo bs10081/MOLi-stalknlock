@@ -31,7 +31,7 @@ async def api_scan(request: Request, db: Session = Depends(get_db)):
         db.commit()
         
         # Send notification
-        send_telegram(f"歡迎！{user.name} ({user.student_id}) 已進入實驗室")
+        send_telegram(f"歡迎！{user.name} ({user.student_id}) 解鎖門禁")
         
         return {
             "status": "allow",
