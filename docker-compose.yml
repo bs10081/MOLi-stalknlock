@@ -3,7 +3,7 @@ version: '3.8'
 services:
   moli-door:
     build: .
-    image: bs10081/moli-door:dev  # Use dev tag to distinguish from stable version
+    image: bs10081/moli-door:dev
     container_name: moli-door-system
     restart: unless-stopped
     
@@ -24,14 +24,9 @@ services:
       - ./data:/app/data
       - /dev:/dev  # Full device access
     
-    # Environment variables (can be customized)
-    environment:
-      - PYTHONUNBUFFERED=1
-      - DATABASE_URL=sqlite:///./data/moli_door.db
-      - LOCK_PIN=16
-      - LOCK_ACTIVE_LEVEL=1
-      - LOCK_DURATION=3
-      - REGISTER_TIMEOUT=90
+    # Use .env file for environment variables
+    env_file:
+      - .env
     
     # Network mode: host for better device access
     network_mode: host
