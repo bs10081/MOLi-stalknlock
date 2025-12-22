@@ -27,4 +27,4 @@ ENV PYTHONUNBUFFERED=1     DB_FILE=/app/data/moli_door.db     DOOR_LOG_FILE=/app
 EXPOSE 5001
 
 # Run the door system
-CMD [python, door_system.py]
+CMD ["python", "door_system.py"]
