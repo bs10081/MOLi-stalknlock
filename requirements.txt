@@ -1,0 +1,12 @@
+# Flask web framework
+flask==3.0.0
+flask-cors==4.0.0
+
+# Environment variables
+python-dotenv==1.0.0
+
+# Input device handling (RFID reader)
+evdev==1.6.1
+
+# GPIO control for Raspberry Pi
+RPi.GPIO==0.7.1
