@@ -1,8 +1,17 @@
 import asyncio
 import logging
 import os
-from evdev import InputDevice, ecodes, list_devices
+import sys
 from typing import Optional, Callable
+
+# Try to import evdev, fall back to mock if not available
+try:
+    from evdev import InputDevice, ecodes, list_devices
+    EVDEV_AVAILABLE = True
+except ImportError:
+    EVDEV_AVAILABLE = False
+    log = logging.getLogger(__name__)
+    log.warning("evdev not available, running in mock mode")
 
 from app.config import RFID_DEVICE_PATH
 
@@ -16,25 +25,30 @@ SCANCODE_MAP = {
 
 class RFIDReader:
     def __init__(self):
-        self.device: Optional[InputDevice] = None
-        self.device_path = RFID_DEVICE_PATH
+        self.device: Optional = None
+        self.device_path = RFID_DEVICE_PATH if EVDEV_AVAILABLE else None
         self.current_code = ""
         self.callback: Optional[Callable] = None
         self.loop: Optional[asyncio.AbstractEventLoop] = None
-    
+        self.mock_mode = not EVDEV_AVAILABLE
+
     def initialize_device(self) -> bool:
         """Initialize RFID device"""
+        if self.mock_mode:
+            log.info("📡 RFID reader in mock mode (no hardware)")
+            return True
+
         try:
             # Try specified path first
             if os.path.exists(self.device_path):
                 self.device = InputDevice(self.device_path)
                 log.info(f"📡 RFID device connected: {self.device.name} at {self.device_path}")
                 return True
-            
+
             # Auto-detect RFID device
             log.warning(f"Specified device path not found: {self.device_path}")
             log.info("Attempting to auto-detect RFID device...")
-            
+
             devices = [InputDevice(path) for path in list_devices()]
             for dev in devices:
                 if 'rfid' in dev.name.lower() or 'sycreader' in dev.name.lower():
@@ -42,14 +56,14 @@ class RFIDReader:
                     self.device_path = dev.path
                     log.info(f"📡 Auto-detected RFID device: {dev.name} at {dev.path}")
                     return True
-            
+
             log.error("No RFID device found")
             return False
-            
+
         except Exception as e:
             log.error(f"Failed to initialize RFID device: {e}")
             return False
-    
+
     async def read_loop(self, callback: Callable[[str], None]):
         """
         Async RFID reading loop
@@ -58,17 +72,21 @@ class RFIDReader:
         if not self.initialize_device():
             log.error("Cannot start RFID loop without device")
             return
-        
+
+        if self.mock_mode:
+            log.info("RFID reader in mock mode - no actual scanning")
+            return
+
         self.callback = callback
         self.loop = asyncio.get_event_loop()
         log.info("RFID reader loop started")
-        
+
         try:
             # Run blocking read_loop in executor
             await self.loop.run_in_executor(None, self._blocking_read_loop)
         except Exception as e:
             log.error(f"RFID read loop error: {e}")
-    
+
     def _blocking_read_loop(self):
         """Blocking read loop (runs in executor)"""
         for event in self.device.read_loop():
