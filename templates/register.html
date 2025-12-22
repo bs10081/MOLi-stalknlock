@@ -6,10 +6,102 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>MOLI 門禁註冊</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .admin-bar {
+      background: #f8f9fa;
+      padding: 10px 20px;
+      border-bottom: 1px solid #dee2e6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .admin-info {
+      color: #495057;
+      font-size: 14px;
+    }
+    
+    .admin-info strong {
+      color: #212529;
+    }
+    
+    .btn-logout {
+      padding: 6px 16px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    .btn-logout:hover {
+      background: #c82333;
+    }
+    
+    /* Enhanced loading animation */
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3498db;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .status-text {
+      font-size: 16px;
+      color: #555;
+      margin-top: 10px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: #e0e0e0;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 15px;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3498db, #2ecc71);
+      animation: progress 2s ease-in-out infinite;
+    }
+    
+    @keyframes progress {
+      0% { width: 0%; }
+      50% { width: 70%; }
+      100% { width: 100%; }
+    }
+  </style>
 </head>
 
 <body>
   <div class="page-wrap">
+    <!-- 管理員資訊列 -->
+    {% if admin %}
+    <div class="admin-bar">
+      <div class="admin-info">
+        👤 管理員：<strong>{{ admin.name }}</strong> ({{ admin.sub }})
+      </div>
+      <button class="btn-logout" onclick="logout()">登出</button>
+    </div>
+    {% endif %}
+    
     <header class="moli-header">
       <div class="brand">
         <span class="brand-mark"></span>
@@ -24,6 +116,12 @@
         <div class="card-subtitle">
           請先填寫學號與姓名，送出後依畫面指示刷學生證完成綁定。
         </div>
+
+        {% if error %}
+        <div style="color: #dc3545; padding: 10px; background: #f8d7da; border-radius: 6px; margin-bottom: 15px;">
+          ⚠️ {{ error }}
+        </div>
+        {% endif %}
 
         <form id="registerForm">
           <label for="student_id">學號</label>
@@ -44,21 +142,35 @@
 
   <div id="loadingModal" class="loading-modal">
     <div class="loading-card">
-      <div class="modal-title" id="modalTitle">資料建立成功</div>
+      <div class="modal-title" id="modalTitle">處理中</div>
 
       <div class="spinner" id="loadingSpinner"></div>
       <div class="success-icon" id="successIcon" style="display: none;">✅</div>
 
       <div class="scan-status" id="scanStatus">
-        請在 120 秒內至讀卡機刷卡...
+        正在建立資料並通知系統...
       </div>
+      
+      <div class="progress-bar" id="progressBar">
+        <div class="progress-fill"></div>
+      </div>
+      
+      <div class="status-text" id="statusText">請稍候</div>
       <div id="successMsg" style="display:none; margin-top:10px; text-align:center;"></div>
     </div>
   </div>
 
   <script>
-    // 接收後端傳來的 ngrok 網址
-    const PI_API_URL = "{{ pi_api_url }}";
+    async function logout() {
+      try {
+        const resp = await fetch('/logout', { method: 'POST' });
+        if (resp.ok) {
+          window.location.href = '/';
+        }
+      } catch (err) {
+        console.error('登出失敗', err);
+      }
+    }
 
     document.getElementById("registerForm").addEventListener("submit", async function (e) {
       e.preventDefault();
@@ -77,31 +189,33 @@
       formData.append("student_id", student_id);
       formData.append("name", name);
 
+      // 顯示 loading modal
+      const modal = document.getElementById("loadingModal");
+      const spinner = document.getElementById("loadingSpinner");
+      const successIcon = document.getElementById("successIcon");
+      const scanStatus = document.getElementById("scanStatus");
+      const statusText = document.getElementById("statusText");
+      const progressBar = document.getElementById("progressBar");
+      
+      modal.style.display = "block";
+      spinner.style.display = "block";
+      successIcon.style.display = "none";
+      scanStatus.textContent = "正在建立資料並發送通知...";
+      statusText.textContent = "請稍候";
+      progressBar.style.display = "block";
+
       try {
         const resp = await fetch("/register", { method: "POST", body: formData });
 
         if (resp.ok) {
-          // 嘗試切換 Pi 為註冊模式
-          try {
-            if (PI_API_URL && PI_API_URL !== "None") {
-              const piResp = await fetch(`${PI_API_URL}/mode/register`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-API-KEY": "{{ api_key }}" },
-                body: JSON.stringify({ student_id: student_id })
-              });
-              if (!piResp.ok) {
-                console.error(`Pi 模式切換失敗: ${piResp.status} ${await piResp.text()}`);
-              } else {
-                console.log("Pi 模式切換成功");
-              }
-            }
-          } catch (piErr) {
-            console.error("讀卡機連線失敗", piErr);
-          }
-
-          document.getElementById("loadingModal").style.display = "block";
+          const data = await resp.json();
+          // 更新狀態：準備刷卡
+          scanStatus.textContent = data.message || "請在 90 秒內刷卡兩次...";
+          statusText.textContent = "等待刷卡";
+          progressBar.style.display = "none";
+          
+          // 開始 polling
           startPolling(student_id);
-
         } else {
           let msg = "註冊失敗";
           try {
@@ -111,10 +225,12 @@
             msg = await resp.text() || msg;
           }
           errorMsg.textContent = msg;
+          modal.style.display = "none";
         }
       } catch (err) {
         console.error(err);
         errorMsg.textContent = "連線錯誤，請檢查網路";
+        modal.style.display = "none";
       }
     });
 
@@ -124,9 +240,10 @@
       const spinner = document.getElementById("loadingSpinner");
       const successIcon = document.getElementById("successIcon");
       const modalTitle = document.getElementById("modalTitle");
+      const statusText = document.getElementById("statusText");
 
       let attempts = 0;
-      const maxAttempts = 60; // 120 秒（每 2 秒輪詢一次）
+      const maxAttempts = 45; // 90 秒（每 2 秒輪詢一次）
 
       const intervalId = setInterval(async () => {
         attempts++;
@@ -135,8 +252,8 @@
           if (!res.ok) throw new Error("Status check failed");
           const data = await res.json();
 
-          // === 成功判斷：優先 bound，其次 step_2 有 message ===
-          if (data.bound || (data.status === "step_2" && data.message) || data.currentStep === 2 && data.message) {
+          // 檢查是否已綁定卡片（支援副卡檢測）
+          if (data.bound && data.card_count > data.initial_count) {
             clearInterval(intervalId);
             spinner.style.display = "none";
             successIcon.style.display = "block";
@@ -146,47 +263,29 @@
             modalTitle.textContent = "綁定完成！";
             modalTitle.style.color = "#22c55e";
 
-            scanStatus.textContent = "歡迎進入 MOLI 實驗室";
+            scanStatus.textContent = `歡迎進入 MOLI 實驗室（已綁定 ${data.card_count} 張卡片）`;
             scanStatus.style.fontWeight = "bold";
             scanStatus.style.color = "#22c55e";
-
-            if (data.message) {
-              successMsg.textContent = data.message;
-              successMsg.style.display = "block";
-              successMsg.style.color = "#22c55e";
-            }
+            statusText.style.display = "none";
 
             setTimeout(() => {
               window.location.href = `/success?student_id=${encodeURIComponent(student_id)}`;
             }, 1500);
             return;
           }
-
-          // === 第一次刷卡成功 ===
-          if (data.status === "step_1") {
-            scanStatus.textContent = "✅ 讀取成功！請使用此進行“第二次刷卡”確認...";
-            scanStatus.style.color = "#2563eb";
-            scanStatus.style.fontWeight = "bold";
-            successMsg.style.display = "none";
+          
+          // 更新狀態文字
+          if (attempts % 5 === 0) {
+            statusText.textContent = `等待刷卡中... (${Math.floor((maxAttempts - attempts) * 2 / 60)} 分 ${(maxAttempts - attempts) * 2 % 60} 秒)`;
           }
 
-          // === 進入 step_2（等待信箱點擊或第二次刷卡）===
-          else if (data.status === "step_2" || data.currentStep === 2) {
-            successMsg.innerHTML = `
-              <strong style="color:#2563eb;">${data.message || '請查收學校信箱'}</strong><br>
-              ${data.hint || ''}<br><br>
-              開啟信箱點擊「註冊連結」後，請再次刷卡完成綁定。
-            `;
-            successMsg.style.display = "block";
-          }
-
-          // === 逾時處理 ===
+          // 逾時處理
           if (attempts >= maxAttempts) {
             clearInterval(intervalId);
             spinner.style.display = "none";
             scanStatus.textContent = "❌ 刷卡逾時，請重新整理頁面再試。";
             scanStatus.style.color = "red";
-            successMsg.style.display = "none";
+            statusText.style.display = "none";
           }
         } catch (e) {
           console.error("輪詢錯誤", e);
@@ -194,6 +293,7 @@
           spinner.style.display = "none";
           scanStatus.textContent = "❌ 連線錯誤，請重新整理頁面再試。";
           scanStatus.style.color = "red";
+          statusText.style.display = "none";
         }
       }, 2000);
     }
