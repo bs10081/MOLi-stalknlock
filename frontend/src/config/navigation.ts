@@ -1,4 +1,4 @@
-import { Home, Users, CreditCard, FileText, Shield, DoorOpen, Settings, type LucideIcon } from 'lucide-react'
+import { Home, Users, UserCheck, CreditCard, FileText, Shield, DoorOpen, Settings, type LucideIcon } from 'lucide-react'
 
 export interface NavItem {
   id: string
@@ -33,6 +33,12 @@ export const navigation: NavGroup[] = [
         icon: Users,
         href: '/dashboard/users',
         children: [
+          {
+            id: 'personnel',
+            label: '人員',
+            icon: UserCheck,
+            href: '/dashboard/personnel'
+          },
           {
             id: 'cards',
             label: '卡片管理',

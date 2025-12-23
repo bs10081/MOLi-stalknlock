@@ -3,6 +3,7 @@ import { LoginPage } from './pages/LoginPage'
 import { HomePage } from './pages/HomePage'
 import { DashboardLayout } from './components/layout/DashboardLayout'
 import { OverviewPage } from './pages/dashboard/OverviewPage'
+import { PersonnelPage } from './pages/dashboard/PersonnelPage'
 import { UsersPage } from './pages/dashboard/UsersPage'
 import { AdminsPage } from './pages/dashboard/AdminsPage'
 import { CardsPage } from './pages/dashboard/CardsPage'
@@ -21,6 +22,7 @@ function App() {
         {/* Dashboard 頁面（帶 Sidebar 佈局）*/}
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<OverviewPage />} />
+          <Route path="personnel" element={<PersonnelPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="cards" element={<CardsPage />} />
           <Route path="logs" element={<AccessLogsPage />} />

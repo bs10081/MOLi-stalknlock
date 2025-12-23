@@ -30,7 +30,7 @@ export const DoorControlPage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Door Control Card */}
-        <Card>
+        <Card className="order-1">
           <CardHeader>
             <CardTitle>遠程開門</CardTitle>
           </CardHeader>
@@ -71,8 +71,23 @@ export const DoorControlPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Recent Access Card */}
-        <Card>
+        {/* Warning Card - Shows second on mobile, third on desktop */}
+        <Card className="order-2 lg:order-3 lg:col-span-2 bg-yellow-50 border-yellow-200">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-yellow-900 mb-1">安全提醒</p>
+                <p className="text-sm text-yellow-800">
+                  遠程開門功能僅供緊急情況使用。請確保在使用此功能時，實驗室有人員在場。所有遠程開門操作都會被記錄。
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Access Card - Shows third on mobile, second on desktop */}
+        <Card className="order-3 lg:order-2">
           <CardHeader>
             <CardTitle>最近存取</CardTitle>
           </CardHeader>
@@ -92,21 +107,6 @@ export const DoorControlPage: React.FC = () => {
                   </div>
                 </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Warning Card */}
-        <Card className="lg:col-span-2 bg-yellow-50 border-yellow-200">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-yellow-900 mb-1">安全提醒</p>
-                <p className="text-sm text-yellow-800">
-                  遠程開門功能僅供緊急情況使用。請確保在使用此功能時，實驗室有人員在場。所有遠程開門操作都會被記錄。
-                </p>
-              </div>
             </div>
           </CardContent>
         </Card>

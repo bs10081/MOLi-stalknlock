@@ -47,38 +47,73 @@ export const AccessLogsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Logs Table */}
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>時間</TableHead>
-                <TableHead>使用者</TableHead>
-                <TableHead>卡片 ID</TableHead>
-                <TableHead>動作</TableHead>
-                <TableHead>狀態</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {mockLogs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell className="text-text-secondary font-mono text-sm">
-                    {log.timestamp}
-                  </TableCell>
-                  <TableCell className="font-medium">{log.user}</TableCell>
-                  <TableCell className="font-mono text-sm">{log.card_id}</TableCell>
-                  <TableCell>開門</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={log.status === 'success' ? 'success' : 'error'}
-                      size="sm"
-                    >
-                      {log.status === 'success' ? '成功' : '失敗'}
-                    </Badge>
-                  </TableCell>
+          {/* Logs Table - Desktop */}
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>時間</TableHead>
+                  <TableHead>使用者</TableHead>
+                  <TableHead>卡片 ID</TableHead>
+                  <TableHead>動作</TableHead>
+                  <TableHead>狀態</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {mockLogs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="text-text-secondary font-mono text-sm">
+                      {log.timestamp}
+                    </TableCell>
+                    <TableCell className="font-medium">{log.user}</TableCell>
+                    <TableCell className="font-mono text-sm">{log.card_id}</TableCell>
+                    <TableCell>開門</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={log.status === 'success' ? 'success' : 'error'}
+                        size="sm"
+                      >
+                        {log.status === 'success' ? '成功' : '失敗'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Logs List - Mobile */}
+          <div className="md:hidden space-y-4">
+            {mockLogs.map((log) => (
+              <div key={log.id} className="border border-border rounded-lg p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="font-medium text-text-primary">{log.user}</h3>
+                    <p className="text-sm text-text-secondary font-mono mt-1">
+                      {log.timestamp}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={log.status === 'success' ? 'success' : 'error'}
+                    size="sm"
+                  >
+                    {log.status === 'success' ? '成功' : '失敗'}
+                  </Badge>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-text-secondary">
+                    <span className="font-medium min-w-[70px]">卡片 ID:</span>
+                    <span className="font-mono">{log.card_id}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-text-secondary">
+                    <span className="font-medium min-w-[70px]">動作:</span>
+                    <span>開門</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
 
           {/* Table Footer */}
           <div className="mt-4 text-sm text-text-secondary">

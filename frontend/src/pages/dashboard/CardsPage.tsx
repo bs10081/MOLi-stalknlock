@@ -46,38 +46,68 @@ export const CardsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Cards Table */}
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>卡片 ID</TableHead>
-                <TableHead>持有人</TableHead>
-                <TableHead>狀態</TableHead>
-                <TableHead>建立日期</TableHead>
-                <TableHead className="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {mockCards.map((card) => (
-                <TableRow key={card.id}>
-                  <TableCell className="font-medium font-mono">{card.card_id}</TableCell>
-                  <TableCell>{card.owner}</TableCell>
-                  <TableCell>
-                    <Badge variant={card.status === 'active' ? 'success' : 'secondary'} size="sm">
-                      {card.status === 'active' ? '啟用' : '停用'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-text-secondary">{card.created_at}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="danger" size="sm" className="gap-2">
-                      <Trash2 className="w-3 h-3" />
-                      移除
-                    </Button>
-                  </TableCell>
+          {/* Cards Table - Desktop */}
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>卡片 ID</TableHead>
+                  <TableHead>持有人</TableHead>
+                  <TableHead>狀態</TableHead>
+                  <TableHead>建立日期</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {mockCards.map((card) => (
+                  <TableRow key={card.id}>
+                    <TableCell className="font-medium font-mono">{card.card_id}</TableCell>
+                    <TableCell>{card.owner}</TableCell>
+                    <TableCell>
+                      <Badge variant={card.status === 'active' ? 'success' : 'secondary'} size="sm">
+                        {card.status === 'active' ? '啟用' : '停用'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-text-secondary">{card.created_at}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="danger" size="sm" className="gap-2">
+                        <Trash2 className="w-3 h-3" />
+                        移除
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Cards List - Mobile */}
+          <div className="md:hidden space-y-4">
+            {mockCards.map((card) => (
+              <div key={card.id} className="border border-border rounded-lg p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-medium font-mono text-text-primary">{card.card_id}</h3>
+                    <p className="text-sm text-text-secondary mt-1">持有人：{card.owner}</p>
+                  </div>
+                  <Badge variant={card.status === 'active' ? 'success' : 'secondary'} size="sm">
+                    {card.status === 'active' ? '啟用' : '停用'}
+                  </Badge>
+                </div>
+
+                <div className="text-sm text-text-secondary">
+                  建立日期：{card.created_at}
+                </div>
+
+                <div className="pt-2 border-t border-border">
+                  <Button variant="danger" size="sm" className="w-full gap-2">
+                    <Trash2 className="w-3 h-3" />
+                    移除
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
 
           {/* Table Footer */}
           <div className="mt-4 text-sm text-text-secondary">

@@ -43,38 +43,67 @@ export const AdminsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Admins Table */}
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>使用者名稱</TableHead>
-                <TableHead>信箱</TableHead>
-                <TableHead>建立日期</TableHead>
-                <TableHead className="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {mockAdmins.map((admin) => (
-                <TableRow key={admin.id}>
-                  <TableCell className="font-medium">{admin.username}</TableCell>
-                  <TableCell>{admin.email}</TableCell>
-                  <TableCell className="text-text-secondary">{admin.created_at}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button variant="secondary" size="sm" className="gap-2">
-                        <Edit className="w-3 h-3" />
-                        編輯
-                      </Button>
-                      <Button variant="danger" size="sm" className="gap-2">
-                        <Trash2 className="w-3 h-3" />
-                        刪除
-                      </Button>
-                    </div>
-                  </TableCell>
+          {/* Admins Table - Desktop */}
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>使用者名稱</TableHead>
+                  <TableHead>信箱</TableHead>
+                  <TableHead>建立日期</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {mockAdmins.map((admin) => (
+                  <TableRow key={admin.id}>
+                    <TableCell className="font-medium">{admin.username}</TableCell>
+                    <TableCell>{admin.email}</TableCell>
+                    <TableCell className="text-text-secondary">{admin.created_at}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="secondary" size="sm" className="gap-2">
+                          <Edit className="w-3 h-3" />
+                          編輯
+                        </Button>
+                        <Button variant="danger" size="sm" className="gap-2">
+                          <Trash2 className="w-3 h-3" />
+                          刪除
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Admins List - Mobile */}
+          <div className="md:hidden space-y-4">
+            {mockAdmins.map((admin) => (
+              <div key={admin.id} className="border border-border rounded-lg p-4 space-y-3">
+                <div>
+                  <h3 className="font-medium text-text-primary">{admin.username}</h3>
+                  <p className="text-sm text-text-secondary mt-1">{admin.email}</p>
+                </div>
+
+                <div className="text-sm text-text-secondary">
+                  建立日期：{admin.created_at}
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-border">
+                  <Button variant="secondary" size="sm" className="flex-1 gap-2">
+                    <Edit className="w-3 h-3" />
+                    編輯
+                  </Button>
+                  <Button variant="danger" size="sm" className="flex-1 gap-2">
+                    <Trash2 className="w-3 h-3" />
+                    刪除
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
 
           {/* Table Footer */}
           <div className="mt-4 text-sm text-text-secondary">
