@@ -23,8 +23,8 @@ export const LoginPage: React.FC = () => {
 
     // 簡單驗證
     if (username === 'admin' && password === 'admin123') {
-      // 登入成功，重導向到首頁
-      navigate('/')
+      // 登入成功，重導向到管理後台
+      navigate('/dashboard')
     } else {
       setError('帳號或密碼錯誤')
       setLoading(false)
