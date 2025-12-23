@@ -45,6 +45,17 @@ export const userService = {
     return api.delete(`/admin/users/${id}`)
   },
 
+  bulkDeleteUsers: async (ids: string[]) => {
+    const formData = new FormData()
+    ids.forEach(id => formData.append('user_ids', id))
+    return api.delete('/admin/users/bulk', {
+      data: formData,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
+
   getUserCards: async (id: string) => {
     const response = await api.get<Card[]>(`/admin/users/${id}/cards`)
     return response.data
@@ -68,6 +79,17 @@ export const userService = {
 
   deleteCard: async (cardId: string) => {
     return api.delete(`/admin/cards/${cardId}`)
+  },
+
+  bulkDeleteCards: async (ids: string[]) => {
+    const formData = new FormData()
+    ids.forEach(id => formData.append('card_ids', id))
+    return api.delete('/admin/cards/bulk', {
+      data: formData,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
   },
 
   createCard: async (userId: string, rfidUid: string, nickname?: string) => {

@@ -15,7 +15,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // 重導向到登入頁
       if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/admin/login'
+        window.location.href = '/login'
       }
     }
     return Promise.reject(error)

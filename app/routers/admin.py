@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Cookie, BackgroundTasks, Form
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 import pytz
 import logging
 import requests
@@ -234,6 +234,38 @@ async def delete_user(
 
     return {"message": f"已刪除用戶 {user_name} 及其 {card_count} 張卡片"}
 
+@router.delete("/users/bulk")
+async def bulk_delete_users(
+    user_ids: List[str] = Form(...),
+    background_tasks: BackgroundTasks = None,
+    admin_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """批量刪除用戶"""
+    current_admin = get_current_admin(admin_token)
+
+    deleted_count = 0
+    deleted_card_count = 0
+
+    for user_id in user_ids:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            card_count = db.query(Card).filter(Card.user_id == user_id).count()
+            db.delete(user)
+            deleted_count += 1
+            deleted_card_count += card_count
+
+    db.commit()
+
+    log.info(f"🗑️ Admin {current_admin['name']} bulk deleted {deleted_count} users with {deleted_card_count} cards")
+
+    # 背景發送通知
+    if background_tasks:
+        message = f"🗑️ 批量刪除：{deleted_count} 位用戶及 {deleted_card_count} 張卡片\n操作者：{current_admin['name']}"
+        background_tasks.add_task(send_telegram, message)
+
+    return {"message": f"已刪除 {deleted_count} 位用戶及 {deleted_card_count} 張卡片"}
+
 @router.delete("/cards/{card_id}")
 async def delete_card(
     card_id: str,
@@ -264,6 +296,35 @@ async def delete_card(
     log.info(f"🗑️ Admin {current_admin['name']} deleted card {card_uid}")
 
     return {"message": "卡片已刪除"}
+
+@router.delete("/cards/bulk")
+async def bulk_delete_cards(
+    card_ids: List[str] = Form(...),
+    background_tasks: BackgroundTasks = None,
+    admin_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """批量刪除卡片"""
+    current_admin = get_current_admin(admin_token)
+
+    deleted_count = 0
+
+    for card_id in card_ids:
+        card = db.query(Card).filter(Card.id == card_id).first()
+        if card:
+            db.delete(card)
+            deleted_count += 1
+
+    db.commit()
+
+    log.info(f"🗑️ Admin {current_admin['name']} bulk deleted {deleted_count} cards")
+
+    # 背景發送通知
+    if background_tasks:
+        message = f"🗑️ 批量刪除：{deleted_count} 張卡片\n操作者：{current_admin['name']}"
+        background_tasks.add_task(send_telegram, message)
+
+    return {"message": f"已刪除 {deleted_count} 張卡片"}
 
 @router.put("/cards/{card_id}")
 async def update_card(

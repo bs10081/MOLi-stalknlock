@@ -6,14 +6,21 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-
+import { Checkbox } from '@/components/ui/checkbox'
+import { EditPanel } from '@/components/ui/edit-panel'
+import { BulkActionBar } from '@/components/ui/bulk-action-bar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
-import { Search, Plus, Trash2, X, Edit, CreditCard, QrCode } from 'lucide-react'
+import { Search, Plus, X, ChevronRight, CreditCard, QrCode } from 'lucide-react'
 import { userService } from '@/services/userService'
 import type { Card, User } from '@/types'
 
 interface CardWithUser extends Card {
   user?: User
+}
+
+interface FormDataType {
+  nickname: string
+  is_active: boolean
 }
 
 export const CardsPage: React.FC = () => {
@@ -24,15 +31,24 @@ export const CardsPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [editingCard, setEditingCard] = useState<CardWithUser | null>(null)
-  const [formData, setFormData] = useState({ alias: '', is_active: true })
-  const [saving, setSaving] = useState(false)
+
+  // 批量選擇狀態
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // 行內編輯狀態（支援多行同時展開）
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [editFormDataMap, setEditFormDataMap] = useState<Map<string, FormDataType>>(new Map())
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set())
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+
+  // 新增對話框狀態
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [addFormData, setAddFormData] = useState({
     userId: '',
     rfidUid: '',
     nickname: '',
   })
+  const [addSaving, setAddSaving] = useState(false)
 
   const userIdFilter = searchParams.get('user')
 
@@ -48,12 +64,12 @@ export const CardsPage: React.FC = () => {
         userService.getAllCards(),
         userService.getUsers()
       ])
-      
+
       const cardsWithUsers = cardsData.map(card => ({
         ...card,
         user: usersData.find(u => u.id === card.user_id)
       }))
-      
+
       setCards(cardsWithUsers)
       setUsers(usersData)
     } catch (err: any) {
@@ -62,6 +78,195 @@ export const CardsPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  // ========== 批量選擇邏輯 ==========
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(filteredCards.map(c => c.id)))
+    } else {
+      setSelectedIds(new Set())
+    }
+  }
+
+  const handleSelectOne = (cardId: string, checked: boolean) => {
+    const newSet = new Set(selectedIds)
+    if (checked) {
+      newSet.add(cardId)
+    } else {
+      newSet.delete(cardId)
+    }
+    setSelectedIds(newSet)
+  }
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set())
+  }
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`確定要刪除 ${selectedIds.size} 張卡片嗎？此操作無法復原。`)) return
+
+    try {
+      // TODO: 實作批量刪除 API
+      for (const id of Array.from(selectedIds)) {
+        await userService.deleteCard(id)
+      }
+      await loadData()
+      setSelectedIds(new Set())
+      alert('批量刪除成功')
+    } catch (err: any) {
+      console.error('Failed to bulk delete cards:', err)
+      alert(err.response?.data?.detail || '批量刪除失敗')
+    }
+  }
+
+  // ========== 行內編輯邏輯 ==========
+  const handleEdit = (card: CardWithUser) => {
+    const newExpandedIds = new Set(expandedIds)
+    const newFormDataMap = new Map(editFormDataMap)
+
+    if (newExpandedIds.has(card.id)) {
+      // 如果已展開，則收合
+      newExpandedIds.delete(card.id)
+      newFormDataMap.delete(card.id)
+    } else {
+      // 展開並初始化表單資料
+      newExpandedIds.add(card.id)
+      newFormDataMap.set(card.id, {
+        nickname: card.nickname || '',
+        is_active: card.is_active,
+      })
+    }
+
+    setExpandedIds(newExpandedIds)
+    setEditFormDataMap(newFormDataMap)
+  }
+
+  const handleFormChange = (cardId: string, field: keyof FormDataType, value: string | boolean) => {
+    const newFormDataMap = new Map(editFormDataMap)
+    const formData = newFormDataMap.get(cardId)
+    if (formData) {
+      newFormDataMap.set(cardId, { ...formData, [field]: value })
+      setEditFormDataMap(newFormDataMap)
+    }
+  }
+
+  const handleSave = async (cardId: string) => {
+    const formData = editFormDataMap.get(cardId)
+    if (!formData) return
+
+    try {
+      setSavingIds(new Set(savingIds).add(cardId))
+      await userService.updateCard(cardId, formData.nickname, formData.is_active)
+      await loadData()
+
+      // 收合編輯區
+      const newExpandedIds = new Set(expandedIds)
+      const newFormDataMap = new Map(editFormDataMap)
+      newExpandedIds.delete(cardId)
+      newFormDataMap.delete(cardId)
+      setExpandedIds(newExpandedIds)
+      setEditFormDataMap(newFormDataMap)
+    } catch (err: any) {
+      console.error('Failed to update card:', err)
+      alert(err.response?.data?.detail || '更新卡片失敗')
+    } finally {
+      const newSavingIds = new Set(savingIds)
+      newSavingIds.delete(cardId)
+      setSavingIds(newSavingIds)
+    }
+  }
+
+  const handleCancel = (cardId: string) => {
+    const newExpandedIds = new Set(expandedIds)
+    const newFormDataMap = new Map(editFormDataMap)
+    newExpandedIds.delete(cardId)
+    newFormDataMap.delete(cardId)
+    setExpandedIds(newExpandedIds)
+    setEditFormDataMap(newFormDataMap)
+  }
+
+  const handleDelete = async (cardId: string) => {
+    if (!confirm('確定要移除此卡片嗎？')) return
+
+    try {
+      setDeletingIds(new Set(deletingIds).add(cardId))
+      await userService.deleteCard(cardId)
+      await loadData()
+
+      // 收合編輯區
+      const newExpandedIds = new Set(expandedIds)
+      const newFormDataMap = new Map(editFormDataMap)
+      newExpandedIds.delete(cardId)
+      newFormDataMap.delete(cardId)
+      setExpandedIds(newExpandedIds)
+      setEditFormDataMap(newFormDataMap)
+    } catch (err: any) {
+      console.error('Failed to delete card:', err)
+      alert(err.response?.data?.detail || '刪除卡片失敗')
+    } finally {
+      const newDeletingIds = new Set(deletingIds)
+      newDeletingIds.delete(cardId)
+      setDeletingIds(newDeletingIds)
+    }
+  }
+
+  // ========== 新增卡片邏輯 ==========
+  const handleAdd = () => {
+    setIsAddDialogOpen(true)
+    setAddFormData({
+      userId: userIdFilter || '',
+      rfidUid: '',
+      nickname: '',
+    })
+  }
+
+  const handleAddCard = async () => {
+    if (!addFormData.userId || !addFormData.rfidUid) {
+      alert('請選擇使用者並輸入卡片 ID')
+      return
+    }
+
+    try {
+      setAddSaving(true)
+      await userService.createCard(
+        addFormData.userId,
+        addFormData.rfidUid,
+        addFormData.nickname || undefined
+      )
+      await loadData()
+      setIsAddDialogOpen(false)
+      setAddFormData({ userId: '', rfidUid: '', nickname: '' })
+      alert('卡片新增成功')
+    } catch (err: any) {
+      console.error('Failed to create card:', err)
+      alert(err.response?.data?.detail || '新增卡片失敗')
+    } finally {
+      setAddSaving(false)
+    }
+  }
+
+  const handleStartBinding = async () => {
+    if (!addFormData.userId) {
+      alert('請選擇使用者')
+      return
+    }
+
+    try {
+      setAddSaving(true)
+      await userService.startCardBinding(addFormData.userId)
+      setIsAddDialogOpen(false)
+      // 導向到綁定頁面
+      navigate(`/dashboard/register?user=${addFormData.userId}`)
+    } catch (err: any) {
+      console.error('Failed to start card binding:', err)
+      alert(err.response?.data?.detail || '啟動綁定模式失敗')
+      setAddSaving(false)
+    }
+  }
+
+  const clearFilter = () => {
+    navigate('/dashboard/cards')
   }
 
   const filteredCards = useMemo(() => {
@@ -82,99 +287,9 @@ export const CardsPage: React.FC = () => {
     return filteredList
   }, [cards, userIdFilter, searchTerm])
 
-  const clearFilter = () => {
-    navigate('/dashboard/cards')
-  }
-
-  const handleEdit = (card: CardWithUser) => {
-    setEditingCard(card)
-    setFormData({ alias: card.nickname || '', is_active: card.is_active })
-  }
-
-  const handleSave = async () => {
-    if (!editingCard) return
-
-    try {
-      setSaving(true)
-      await userService.updateCard(editingCard.id, formData.alias, formData.is_active)
-      await loadData()
-      setEditingCard(null)
-    } catch (err: any) {
-      console.error('Failed to update card:', err)
-      alert(err.response?.data?.detail || '更新卡片失敗')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleDelete = async (cardId: string) => {
-    if (!confirm('確定要移除此卡片嗎？')) return
-
-    try {
-      await userService.deleteCard(cardId)
-      await loadData()
-    } catch (err: any) {
-      console.error('Failed to delete card:', err)
-      alert(err.response?.data?.detail || '刪除卡片失敗')
-    }
-  }
-
-  const handleCancel = () => {
-    setEditingCard(null)
-  }
-
-  const handleAdd = () => {
-    setIsAddDialogOpen(true)
-    setAddFormData({
-      userId: userIdFilter || '',
-      rfidUid: '',
-      nickname: '',
-    })
-  }
-
-  const handleAddCard = async () => {
-    if (!addFormData.userId || !addFormData.rfidUid) {
-      alert('請選擇使用者並輸入卡片 ID')
-      return
-    }
-
-    try {
-      setSaving(true)
-      await userService.createCard(
-        addFormData.userId,
-        addFormData.rfidUid,
-        addFormData.nickname || undefined
-      )
-      await loadData()
-      setIsAddDialogOpen(false)
-      setAddFormData({ userId: '', rfidUid: '', nickname: '' })
-      alert('卡片新增成功')
-    } catch (err: any) {
-      console.error('Failed to create card:', err)
-      alert(err.response?.data?.detail || '新增卡片失敗')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleStartBinding = async () => {
-    if (!addFormData.userId) {
-      alert('請選擇使用者')
-      return
-    }
-
-    try {
-      setSaving(true)
-      await userService.startCardBinding(addFormData.userId)
-      setIsAddDialogOpen(false)
-      // 導向到綁定頁面
-      navigate(`/dashboard/register?user=${addFormData.userId}`)
-    } catch (err: any) {
-      console.error('Failed to start card binding:', err)
-      alert(err.response?.data?.detail || '啟動綁定模式失敗')
-      setSaving(false)
-    }
-  }
+  // 計算全選狀態
+  const allSelected = filteredCards.length > 0 && filteredCards.every(c => selectedIds.has(c.id))
+  const someSelected = filteredCards.some(c => selectedIds.has(c.id)) && !allSelected
 
   const filteredUserName = userIdFilter
     ? users.find(user => user.id === userIdFilter)?.name
@@ -261,10 +376,26 @@ export const CardsPage: React.FC = () => {
             </div>
           </div>
 
+          {/* 批量操作欄 */}
+          {selectedIds.size > 0 && (
+            <BulkActionBar
+              selectedCount={selectedIds.size}
+              onClearSelection={handleClearSelection}
+              onBulkDelete={handleBulkDelete}
+            />
+          )}
+
           <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={allSelected}
+                      indeterminate={someSelected}
+                      onChange={handleSelectAll}
+                    />
+                  </TableHead>
                   <TableHead>卡片 ID</TableHead>
                   <TableHead>別名</TableHead>
                   <TableHead>持有人</TableHead>
@@ -275,48 +406,124 @@ export const CardsPage: React.FC = () => {
               </TableHeader>
               <TableBody>
                 {filteredCards.length > 0 ? (
-                  filteredCards.map((card) => (
-                    <TableRow key={card.id}>
-                      <TableCell className="font-medium font-mono">
-                        {card.rfid_uid.slice(-8)}
-                      </TableCell>
-                      <TableCell>{card.nickname || '-'}</TableCell>
-                      <TableCell>{card.user?.name || '未知'}</TableCell>
-                      <TableCell>
-                        <Badge variant={card.is_active ? 'success' : 'secondary'} size="sm">
-                          {card.is_active ? '啟用' : '停用'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-text-secondary">
-                        {new Date(card.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="gap-2 whitespace-nowrap"
-                            onClick={() => handleEdit(card)}
-                          >
-                            <Edit className="w-3 h-3" />
-                            <span className="hidden lg:inline">編輯</span>
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            className="gap-2 whitespace-nowrap"
-                            onClick={() => handleDelete(card.id)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            <span className="hidden lg:inline">移除</span>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filteredCards.map((card) => {
+                    const isExpanded = expandedIds.has(card.id)
+                    const formData = editFormDataMap.get(card.id)
+                    const isSaving = savingIds.has(card.id)
+                    const isDeleting = deletingIds.has(card.id)
+
+                    return (
+                      <React.Fragment key={card.id}>
+                        <TableRow>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedIds.has(card.id)}
+                              onChange={(checked) => handleSelectOne(card.id, checked)}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium font-mono">
+                            {card.rfid_uid.slice(-8)}
+                          </TableCell>
+                          <TableCell>{card.nickname || '-'}</TableCell>
+                          <TableCell>{card.user?.name || '未知'}</TableCell>
+                          <TableCell>
+                            <Badge variant={card.is_active ? 'success' : 'secondary'} size="sm">
+                              {card.is_active ? '啟用' : '停用'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-text-secondary">
+                            {new Date(card.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <button
+                              onClick={() => handleEdit(card)}
+                              className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+                            >
+                              Edit
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </TableCell>
+                        </TableRow>
+
+                        {/* 行內編輯區域 */}
+                        {isExpanded && formData && (
+                          <TableRow>
+                            <TableCell colSpan={7} className="p-0">
+                              <EditPanel
+                                onSave={() => handleSave(card.id)}
+                                onCancel={() => handleCancel(card.id)}
+                                onDelete={() => handleDelete(card.id)}
+                                saving={isSaving}
+                                deleting={isDeleting}
+                              >
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-sm font-medium text-text-primary mb-1">
+                                      卡片 ID
+                                    </label>
+                                    <Input
+                                      value={card.rfid_uid.slice(-8)}
+                                      disabled
+                                      className="font-mono bg-gray-100"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-sm font-medium text-text-primary mb-1">
+                                      持有人
+                                    </label>
+                                    <Input
+                                      value={card.user?.name || '未知'}
+                                      disabled
+                                      className="bg-gray-100"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-sm font-medium text-text-primary mb-1">
+                                      別名
+                                    </label>
+                                    <Input
+                                      value={formData.nickname}
+                                      onChange={(e) => handleFormChange(card.id, 'nickname', e.target.value)}
+                                      placeholder="例如：學生證、悠遊卡、手錶"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-sm font-medium text-text-primary mb-1">
+                                      卡片狀態
+                                    </label>
+                                    <div className="flex items-center gap-3 h-10 px-3 bg-white border border-gray-200 rounded-lg">
+                                      <span className="text-sm text-text-secondary flex-1">
+                                        {formData.is_active ? '已啟用' : '已停用'}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleFormChange(card.id, 'is_active', !formData.is_active)}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 flex-shrink-0 ${
+                                          formData.is_active ? 'bg-green-600' : 'bg-gray-300'
+                                        }`}
+                                      >
+                                        <span
+                                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                            formData.is_active ? 'translate-x-6' : 'translate-x-1'
+                                          }`}
+                                        />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </EditPanel>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    )
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-text-secondary">
+                    <TableCell colSpan={7} className="text-center py-8 text-text-secondary">
                       沒有找到符合條件的卡片
                     </TableCell>
                   </TableRow>
@@ -327,51 +534,147 @@ export const CardsPage: React.FC = () => {
 
           <div className="md:hidden space-y-3">
             {filteredCards.length > 0 ? (
-              filteredCards.map((card) => (
-                <div key={card.id} className="bg-bg-card border border-border rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-text-secondary flex-shrink-0" />
-                        <h3 className="font-semibold font-mono text-text-primary text-sm">
-                          {card.rfid_uid.slice(-8)}
-                        </h3>
+              filteredCards.map((card) => {
+                const isExpanded = expandedIds.has(card.id)
+                const formData = editFormDataMap.get(card.id)
+                const isSaving = savingIds.has(card.id)
+                const isDeleting = deletingIds.has(card.id)
+
+                return (
+                  <div key={card.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                    {/* 卡片標題區域 */}
+                    <div className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <CreditCard className="w-4 h-4 text-text-secondary flex-shrink-0" />
+                            <h3 className="font-semibold font-mono text-text-primary text-sm">
+                              {card.rfid_uid.slice(-8)}
+                            </h3>
+                          </div>
+                          <p className="text-sm text-text-secondary mt-1 truncate">
+                            {card.nickname || '無別名'}
+                          </p>
+                        </div>
+                        <Badge variant={card.is_active ? 'success' : 'secondary'} size="sm" className="ml-2 flex-shrink-0">
+                          {card.is_active ? '啟用' : '停用'}
+                        </Badge>
                       </div>
-                      <p className="text-sm text-text-secondary mt-1 truncate">
-                        {card.nickname || '無別名'}
-                      </p>
+
+                      <div className="text-sm text-text-secondary mb-3">
+                        持有人：<span className="font-medium text-text-primary">{card.user?.name || '未知'}</span>
+                      </div>
+
+                      {/* Edit 連結 */}
+                      <div className="pt-3 border-t border-gray-200">
+                        <button
+                          onClick={() => handleEdit(card)}
+                          className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+                        >
+                          Edit
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                    <Badge variant={card.is_active ? 'success' : 'secondary'} size="sm" className="ml-2 flex-shrink-0">
-                      {card.is_active ? '啟用' : '停用'}
-                    </Badge>
-                  </div>
 
-                  <div className="text-sm text-text-secondary mb-3">
-                    持有人：<span className="font-medium text-text-primary">{card.user?.name || '未知'}</span>
-                  </div>
+                    {/* 行內編輯區域（展開時顯示）*/}
+                    {isExpanded && formData && (
+                      <div className="bg-gray-50 border-t border-gray-200 p-4">
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-text-primary mb-1">
+                              卡片 ID
+                            </label>
+                            <Input
+                              value={card.rfid_uid.slice(-8)}
+                              disabled
+                              className="font-mono bg-gray-100"
+                            />
+                          </div>
 
-                  <div className="flex gap-2 pt-3 border-t border-border">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="flex-1 gap-1.5"
-                      onClick={() => handleEdit(card)}
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                      編輯
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      className="flex-1 gap-1.5"
-                      onClick={() => handleDelete(card.id)}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      移除
-                    </Button>
+                          <div>
+                            <label className="block text-sm font-medium text-text-primary mb-1">
+                              持有人
+                            </label>
+                            <Input
+                              value={card.user?.name || '未知'}
+                              disabled
+                              className="bg-gray-100"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-text-primary mb-1">
+                              別名
+                            </label>
+                            <Input
+                              value={formData.nickname}
+                              onChange={(e) => handleFormChange(card.id, 'nickname', e.target.value)}
+                              placeholder="例如：學生證、悠遊卡"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-text-primary mb-1">
+                              卡片狀態
+                            </label>
+                            <div className="flex items-center gap-3 h-10 px-3 bg-white border border-gray-200 rounded-lg">
+                              <span className="text-sm text-text-secondary flex-1">
+                                {formData.is_active ? '已啟用' : '已停用'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleFormChange(card.id, 'is_active', !formData.is_active)}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 flex-shrink-0 ${
+                                  formData.is_active ? 'bg-green-600' : 'bg-gray-300'
+                                }`}
+                              >
+                                <span
+                                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                    formData.is_active ? 'translate-x-6' : 'translate-x-1'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* 操作按鈕 */}
+                          <div className="flex flex-col gap-2 pt-4 border-t border-gray-200">
+                            <div className="flex gap-2">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleCancel(card.id)}
+                                disabled={isSaving || isDeleting}
+                                className="flex-1"
+                              >
+                                取消
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleSave(card.id)}
+                                disabled={isSaving || isDeleting}
+                                className="flex-1"
+                              >
+                                {isSaving ? '儲存中...' : '儲存'}
+                              </Button>
+                            </div>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleDelete(card.id)}
+                              disabled={isSaving || isDeleting}
+                              className="w-full"
+                            >
+                              {isDeleting ? '刪除中...' : '移除卡片'}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))
+                )
+              })
             ) : (
               <div className="text-center py-8 text-text-secondary">
                 沒有找到符合條件的卡片
@@ -385,88 +688,7 @@ export const CardsPage: React.FC = () => {
         </CardContent>
       </UICard>
 
-      <Dialog open={!!editingCard} onOpenChange={(open) => !open && handleCancel()}>
-        <DialogContent>
-          <DialogHeader onClose={handleCancel}>
-            <DialogTitle>編輯卡片</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1">
-                  卡片 ID
-                </label>
-                <Input
-                  value={editingCard?.rfid_uid.slice(-8) || ''}
-                  disabled
-                  className="font-mono bg-gray-50"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1">
-                  別名
-                </label>
-                <Input
-                  value={formData.alias}
-                  onChange={(e) => setFormData({ ...formData, alias: e.target.value })}
-                  placeholder="例如：學生證、悠遊卡、手錶"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1">
-                  持有人
-                </label>
-                <Input
-                  value={editingCard?.user?.name || '未知'}
-                  disabled
-                  className="bg-gray-50"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-gray-50 border border-border rounded-lg">
-                <div>
-                  <label className="block text-sm font-medium text-text-primary mb-1">
-                    卡片狀態
-                  </label>
-                  <p className="text-xs text-text-secondary">
-                    {formData.is_active ? '已啟用：此卡片可以正常使用' : '已停用：此卡片無法使用'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 ${
-                    formData.is_active ? 'bg-green-600' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      formData.is_active ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-sm text-blue-900">
-                  <strong>提示：</strong>卡片 ID 和持有人無法修改。如需變更請移除此卡片後重新綁定。
-                </p>
-              </div>
-            </div>
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="secondary" onClick={handleCancel} disabled={saving}>
-              取消
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? '儲存中...' : '儲存'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+      {/* 新增卡片對話框 */}
       <Dialog open={isAddDialogOpen} onOpenChange={(open) => !open && setIsAddDialogOpen(false)}>
         <DialogContent>
           <DialogHeader onClose={() => setIsAddDialogOpen(false)}>
@@ -524,10 +746,10 @@ export const CardsPage: React.FC = () => {
                 <Button
                   className="w-full gap-2"
                   onClick={handleAddCard}
-                  disabled={saving || !addFormData.userId || !addFormData.rfidUid}
+                  disabled={addSaving || !addFormData.userId || !addFormData.rfidUid}
                 >
                   <Plus className="w-4 h-4" />
-                  {saving ? '新增中...' : '新增卡片'}
+                  {addSaving ? '新增中...' : '新增卡片'}
                 </Button>
               </div>
 
@@ -554,7 +776,7 @@ export const CardsPage: React.FC = () => {
                   variant="secondary"
                   className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
                   onClick={handleStartBinding}
-                  disabled={saving || !addFormData.userId}
+                  disabled={addSaving || !addFormData.userId}
                 >
                   <QrCode className="w-4 h-4" />
                   啟動刷卡綁定模式
@@ -563,7 +785,7 @@ export const CardsPage: React.FC = () => {
             </div>
           </DialogBody>
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setIsAddDialogOpen(false)} disabled={saving}>
+            <Button variant="secondary" onClick={() => setIsAddDialogOpen(false)} disabled={addSaving}>
               取消
             </Button>
           </DialogFooter>
