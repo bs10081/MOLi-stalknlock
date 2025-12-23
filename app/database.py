@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, TIMESTAMP, func, Integer, ForeignKey
+from sqlalchemy import create_engine, Column, String, TIMESTAMP, func, Integer, ForeignKey, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 import uuid
@@ -14,24 +14,28 @@ def generate_uuid():
 
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(String(36), primary_key=True, default=generate_uuid)
     student_id = Column(String(20), unique=True, nullable=False, index=True)
     name = Column(String(50), nullable=False)
+    email = Column(String(100), nullable=True)
+    telegram_id = Column(String(50), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
-    
+
     # Relationship: One user can have multiple cards
     cards = relationship("Card", back_populates="user", cascade="all, delete-orphan")
 
 class Card(Base):
     __tablename__ = "cards"
-    
+
     id = Column(String(36), primary_key=True, default=generate_uuid)
     rfid_uid = Column(String(50), unique=True, nullable=False, index=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     nickname = Column(String(50), nullable=True)  # Optional: 卡片暱稱（例如：學生證、備用卡）
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
-    
+
     # Relationship
     user = relationship("User", back_populates="cards")
 

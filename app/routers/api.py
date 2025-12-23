@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi import APIRouter, Request, Depends, HTTPException, Form
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -6,6 +6,8 @@ import logging
 
 from app.database import get_db, User, AccessLog, RegistrationSession
 from app.services.telegram import send_telegram
+from app.services.rfid_reader import rfid_reader
+from app.config import DEV_MODE
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["api"])
@@ -144,5 +146,33 @@ async def api_register_scan(request: Request, db: Session = Depends(get_db)):
             db.commit()
             
             return JSONResponse({"error": "mismatch", "message": "兩次卡號不一致，請重新操作"}, status_code=400)
-    
+
     return JSONResponse({"error": "invalid_state"}, status_code=400)
+
+# ========== Development Mode API ==========
+
+@router.post("/dev/simulate-scan")
+async def simulate_rfid_scan(card_uid: str = Form(...)):
+    """
+    [開發模式] 模擬 RFID 刷卡
+    - 用於本地開發測試，無需實際讀卡機
+    - 生產環境應禁用此端點
+    """
+    if not DEV_MODE:
+        raise HTTPException(403, "此端點僅在開發模式可用")
+
+    if not rfid_reader.dev_mode:
+        raise HTTPException(403, "RFID 讀卡機不在開發模式")
+
+    try:
+        success = await rfid_reader.simulate_scan(card_uid)
+        if success:
+            return {"status": "ok", "message": f"已模擬刷卡: {card_uid}"}
+        else:
+            return JSONResponse(
+                {"status": "error", "message": "RFID 讀卡機未就緒"},
+                status_code=500
+            )
+    except Exception as e:
+        log.error(f"模擬刷卡失敗: {e}")
+        raise HTTPException(500, f"模擬刷卡失敗: {str(e)}")

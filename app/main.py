@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from app.routers import api, web, admin
@@ -47,15 +48,28 @@ async def handle_normal_mode(card_uid: str):
     try:
         # 🔍 查詢卡片（一人多卡支援）
         card = db.query(Card).filter(Card.rfid_uid == card_uid).first()
-        
+
         if card and card.user:
             user = card.user
+
+            # 檢查使用者是否已啟用
+            if not user.is_active:
+                log.warning(f"⚠️ Access denied (user disabled): {user.name} ({user.student_id})")
+                deny_access()
+                return
+
+            # 檢查卡片是否已啟用
+            if not card.is_active:
+                log.warning(f"⚠️ Access denied (card disabled): {user.name} ({user.student_id}) - Card {card.rfid_uid}")
+                deny_access()
+                return
+
             card_info = f" ({card.nickname})" if card.nickname else ""
             log.info(f"✅ Access granted: {user.name} ({user.student_id}){card_info}")
-            
+
             # 第一優先級：立即開門（同步執行，不等待）
             open_lock()
-            
+
             # 背景任務：記錄和通知（不阻塞）
             async def background_tasks():
                 # 資料庫寫入（記錄使用哪張卡）
@@ -69,11 +83,11 @@ async def handle_normal_mode(card_uid: str):
                     db.commit()
                 except Exception as e:
                     log.error(f"Failed to log access: {e}")
-                
+
                 # Telegram 通知（非阻塞）
                 message = f"歡迎！{user.name} ({user.student_id}) 解鎖門禁{card_info}"
                 await asyncio.to_thread(send_telegram, message)
-            
+
             # 在背景執行任務
             asyncio.create_task(background_tasks())
         else:
@@ -209,8 +223,30 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add CORS middleware for React SPA
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:8000",
+        "http://localhost:8001",
+        "http://100.72.74.25:8000",
+        "http://100.72.74.25:8001",
+    ],
+    allow_credentials=True,  # 必須，讓 cookie 能被傳送
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Mount React SPA assets (if exists)
+import os
+from fastapi.responses import FileResponse
+
+if os.path.exists("frontend/dist/assets"):
+    app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="spa_assets")
 
 # Register routers
 app.include_router(web.router)
@@ -264,3 +300,15 @@ async def switch_to_register_mode(student_id: str, db: Session = Depends(get_db)
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# Serve React SPA for all /admin/* routes (catch-all for React Router)
+@app.get("/admin/{full_path:path}")
+async def serve_spa(full_path: str):
+    """Serve React SPA for all admin routes (支援 React Router)"""
+    import os
+    if os.path.exists("frontend/dist/index.html"):
+        from fastapi.responses import FileResponse
+        return FileResponse("frontend/dist/index.html")
+    # Fallback: 如果沒有前端構建，返回 404
+    from fastapi import HTTPException
+    raise HTTPException(404, "Frontend not built")

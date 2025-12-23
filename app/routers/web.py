@@ -79,6 +79,14 @@ async def logout(response: Response):
     response.delete_cookie(key="admin_token")
     return response
 
+@router.get("/me")
+async def get_current_user(admin_token: Optional[str] = Cookie(None)):
+    """檢查當前登入狀態"""
+    admin = get_current_admin(admin_token)
+    if not admin:
+        raise HTTPException(status_code=401, detail="未登入")
+    return admin
+
 @router.post("/register")
 async def register_post(
     request: Request,
@@ -208,9 +216,16 @@ async def success(request: Request, student_id: str, db: Session = Depends(get_d
 
 @router.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard(request: Request, admin_token: Optional[str] = Cookie(None)):
-    """管理員控制台"""
-    current_admin = get_current_admin(admin_token)
+    """管理員控制台 - Serve React SPA"""
+    import os
+    from fastapi.responses import FileResponse
     
+    # Serve React SPA (React 會自己處理登入狀態)
+    if os.path.exists("frontend/dist/index.html"):
+        return FileResponse("frontend/dist/index.html")
+    
+    # Fallback: 如果沒有前端構建，使用舊版模板
+    current_admin = get_current_admin(admin_token)
     if not current_admin:
         return RedirectResponse(url="/", status_code=302)
     
