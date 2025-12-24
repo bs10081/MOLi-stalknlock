@@ -262,15 +262,15 @@ async def switch_to_register_mode(student_id: str, db: Session = Depends(get_db)
     if not user:
         log.error(f"❌ User not found: {student_id}")
         return {"status": "error", "message": "用戶不存在"}
-    
+
     # 計算當前卡片數量
     initial_card_count = db.query(Card).filter(Card.user_id == user.id).count()
-    
+
     # 創建或更新 registration session
     session = db.query(RegistrationSession).filter(
         RegistrationSession.user_id == user.id
     ).first()
-    
+
     if session:
         session.first_uid = None
         session.step = 0
@@ -285,30 +285,28 @@ async def switch_to_register_mode(student_id: str, db: Session = Depends(get_db)
             initial_card_count=initial_card_count
         )
         db.add(session)
-    
+
     db.commit()
-    
+
     # Switch to REGISTER mode
     app_state["mode"] = "REGISTER"
     app_state["target_student_id"] = student_id
     app_state["step"] = 0
     app_state["start_time"] = datetime.utcnow().timestamp()
-    
+
     log.info(f"🔄 Switched to REGISTER mode for {student_id} (initial cards: {initial_card_count})")
     return {"status": "ok", "message": "請刷卡"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 # Serve React SPA for all /admin/* routes (catch-all for React Router)
 @app.get("/admin/{full_path:path}")
 async def serve_spa(full_path: str):
     """Serve React SPA for all admin routes (支援 React Router)"""
-    import os
     if os.path.exists("frontend/dist/index.html"):
-        from fastapi.responses import FileResponse
         return FileResponse("frontend/dist/index.html")
     # Fallback: 如果沒有前端構建，返回 404
     from fastapi import HTTPException
     raise HTTPException(404, "Frontend not built")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
