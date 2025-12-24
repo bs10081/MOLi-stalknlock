@@ -329,7 +329,7 @@ async def bulk_delete_cards(
 @router.put("/cards/{card_id}")
 async def update_card(
     card_id: str,
-    nickname: str = Form(...),
+    nickname: Optional[str] = Form(None),
     is_active: str = Form("true"),
     background_tasks: BackgroundTasks = None,
     admin_token: Optional[str] = Cookie(None),
@@ -348,7 +348,9 @@ async def update_card(
     # 將字符串轉換為 boolean
     is_active_bool = is_active.lower() in ('true', '1', 'yes')
 
-    card.nickname = nickname
+    # 只在提供 nickname 時才更新
+    if nickname is not None:
+        card.nickname = nickname
     card.is_active = is_active_bool
     db.commit()
 
@@ -357,7 +359,8 @@ async def update_card(
     if old_active != is_active_bool:
         status_msg = f" (狀態: {'啟用' if is_active_bool else '停用'})"
 
-    log.info(f"✏️ Admin {current_admin['name']} updated card {card.rfid_uid} nickname: {old_nickname} → {nickname}{status_msg}")
+    nickname_msg = f"nickname: {old_nickname} → {card.nickname}" if nickname is not None else f"nickname: {card.nickname}"
+    log.info(f"✏️ Admin {current_admin['name']} updated card {card.rfid_uid} {nickname_msg}{status_msg}")
 
     return {"message": "卡片資料已更新"}
 

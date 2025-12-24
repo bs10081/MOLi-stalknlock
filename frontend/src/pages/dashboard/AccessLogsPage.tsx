@@ -106,20 +106,25 @@ export const AccessLogsPage: React.FC = () => {
       />
 
       <Card>
-        <CardContent className="pt-6">
-          <div className="mb-6">
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary" />
-              <Input
-                placeholder="搜尋使用者或卡片..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+        <CardContent className="p-0">
+          <div className="p-6 pb-0">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary" />
+                <Input
+                  placeholder="搜尋使用者或卡片..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 h-[34px]"
+                />
+              </div>
+              <Button variant="secondary" className="flex-shrink-0 h-[34px] px-4">
+                搜尋
+              </Button>
             </div>
           </div>
 
-          <div className="hidden md:block overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto mt-6">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -155,9 +160,9 @@ export const AccessLogsPage: React.FC = () => {
             </Table>
           </div>
 
-          <div className="md:hidden space-y-3">
+          <div className="md:hidden space-y-3 p-6 pt-0 mt-6">
             {filteredLogs.map((log) => (
-              <div key={log.id} className="bg-bg-card border border-border rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div key={log.id} className="bg-white border border-gray-200 rounded-lg p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-text-primary text-base truncate">{log.user_name}</h3>
@@ -182,7 +187,7 @@ export const AccessLogsPage: React.FC = () => {
             ))}
           </div>
 
-          <div className="mt-4 text-sm text-text-secondary">
+          <div className="px-6 pb-6 pt-4 text-sm text-text-secondary border-t border-border">
             顯示 1-{filteredLogs.length} 筆，共 {filteredLogs.length} 筆記錄
           </div>
         </CardContent>

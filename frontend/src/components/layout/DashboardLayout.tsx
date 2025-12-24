@@ -26,7 +26,7 @@ export const DashboardLayout: React.FC = () => {
   }, [])
 
   return (
-    <div className="min-h-screen bg-bg-primary">
+    <div className="min-h-screen bg-white">
       {/* Sidebar - 固定在左側 */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 

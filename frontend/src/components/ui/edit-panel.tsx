@@ -22,7 +22,7 @@ export const EditPanel: React.FC<EditPanelProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`bg-gray-50 border-t border-b border-gray-200 ${className}`}>
+    <div className={`bg-gray-50 border-b border-gray-200 ${className}`}>
       <div className="px-6 py-4">
         {/* 表單欄位區域 */}
         <div className="mb-4">

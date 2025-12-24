@@ -66,9 +66,9 @@ export const userService = {
     return response.data
   },
 
-  updateCard: async (id: string, nickname: string, is_active?: boolean) => {
+  updateCard: async (id: string, nickname?: string, is_active?: boolean) => {
     const formData = new FormData()
-    formData.append('nickname', nickname)
+    if (nickname !== undefined) formData.append('nickname', nickname)
     if (is_active !== undefined) formData.append('is_active', is_active.toString())
     return api.put(`/admin/cards/${id}`, formData, {
       headers: {

@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { EditPanel } from '@/components/ui/edit-panel'
 import { BulkActionBar } from '@/components/ui/bulk-action-bar'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Search, Plus, X, ChevronRight, CreditCard, QrCode } from 'lucide-react'
 import { userService } from '@/services/userService'
 import type { Card, User } from '@/types'
@@ -41,8 +40,8 @@ export const CardsPage: React.FC = () => {
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set())
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
 
-  // 新增對話框狀態
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  // 新增卡片狀態
+  const [isAddFormOpen, setIsAddFormOpen] = useState(false)
   const [addFormData, setAddFormData] = useState({
     userId: '',
     rfidUid: '',
@@ -117,6 +116,40 @@ export const CardsPage: React.FC = () => {
     } catch (err: any) {
       console.error('Failed to bulk delete cards:', err)
       alert(err.response?.data?.detail || '批量刪除失敗')
+    }
+  }
+
+  const handleBulkDisable = async () => {
+    if (!confirm(`確定要停用 ${selectedIds.size} 張卡片嗎？`)) return
+
+    try {
+      for (const id of Array.from(selectedIds)) {
+        await userService.updateCard(id, undefined, false) // 只更新 is_active，不傳遞 nickname
+      }
+      await loadData()
+      setSelectedIds(new Set())
+      alert('批量停用成功')
+    } catch (err: any) {
+      console.error('Failed to bulk disable cards:', err)
+      const errorMessage = err.response?.data?.detail || err.message || '批量停用失敗'
+      alert(typeof errorMessage === 'string' ? errorMessage : '批量停用失敗')
+    }
+  }
+
+  const handleBulkEnable = async () => {
+    if (!confirm(`確定要啟用 ${selectedIds.size} 張卡片嗎？`)) return
+
+    try {
+      for (const id of Array.from(selectedIds)) {
+        await userService.updateCard(id, undefined, true) // 只更新 is_active 為 true
+      }
+      await loadData()
+      setSelectedIds(new Set())
+      alert('批量啟用成功')
+    } catch (err: any) {
+      console.error('Failed to bulk enable cards:', err)
+      const errorMessage = err.response?.data?.detail || err.message || '批量啟用失敗'
+      alert(typeof errorMessage === 'string' ? errorMessage : '批量啟用失敗')
     }
   }
 
@@ -213,9 +246,18 @@ export const CardsPage: React.FC = () => {
 
   // ========== 新增卡片邏輯 ==========
   const handleAdd = () => {
-    setIsAddDialogOpen(true)
+    setIsAddFormOpen(true)
     setAddFormData({
       userId: userIdFilter || '',
+      rfidUid: '',
+      nickname: '',
+    })
+  }
+
+  const handleCancelAdd = () => {
+    setIsAddFormOpen(false)
+    setAddFormData({
+      userId: '',
       rfidUid: '',
       nickname: '',
     })
@@ -235,7 +277,7 @@ export const CardsPage: React.FC = () => {
         addFormData.nickname || undefined
       )
       await loadData()
-      setIsAddDialogOpen(false)
+      setIsAddFormOpen(false)
       setAddFormData({ userId: '', rfidUid: '', nickname: '' })
       alert('卡片新增成功')
     } catch (err: any) {
@@ -255,7 +297,7 @@ export const CardsPage: React.FC = () => {
     try {
       setAddSaving(true)
       await userService.startCardBinding(addFormData.userId)
-      setIsAddDialogOpen(false)
+      setIsAddFormOpen(false)
       // 導向到綁定頁面
       navigate(`/dashboard/register?user=${addFormData.userId}`)
     } catch (err: any) {
@@ -337,18 +379,12 @@ export const CardsPage: React.FC = () => {
       <PageHeader
         title="卡片管理"
         description="管理所有 RFID 卡片"
-        actions={
-          <Button className="gap-2" onClick={handleAdd}>
-            <Plus className="w-4 h-4" />
-            新增卡片
-          </Button>
-        }
       />
 
       <UICard>
-        <CardContent className="pt-6">
+        <CardContent className="p-0">
           {userIdFilter && filteredUserName && (
-            <div className="mb-4 flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="mx-6 mt-6 flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <span className="text-sm text-blue-900">
                 <strong>篩選條件：</strong>顯示使用者「{filteredUserName}」的卡片
               </span>
@@ -364,28 +400,123 @@ export const CardsPage: React.FC = () => {
             </div>
           )}
 
-          <div className="mb-6">
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary" />
-              <Input
-                placeholder="搜尋卡片 ID、別名或持有人..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+          <div className={userIdFilter ? "p-6 pb-0 pt-4" : "p-6 pb-0"}>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary" />
+                <Input
+                  placeholder="搜尋卡片 ID、別名或持有人..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 h-[34px]"
+                />
+              </div>
+              <Button variant="secondary" className="flex-shrink-0 h-[34px] px-4">
+                搜尋
+              </Button>
+              <Button
+                className="gap-2 flex-shrink-0 h-[34px] px-4"
+                onClick={handleAdd}
+                style={{ backgroundColor: '#046DFF' }}
+              >
+                <Plus className="w-4 h-4" />
+                新增卡片
+              </Button>
             </div>
           </div>
 
-          {/* 批量操作欄 */}
-          {selectedIds.size > 0 && (
-            <BulkActionBar
-              selectedCount={selectedIds.size}
-              onClearSelection={handleClearSelection}
-              onBulkDelete={handleBulkDelete}
-            />
+          {/* 新增卡片展開式表單 */}
+          {isAddFormOpen && (
+            <div className="border-t border-b border-gray-200 bg-gray-50 px-6 py-6 mt-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-text-primary mb-2">
+                    選擇使用者 <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={addFormData.userId}
+                    onChange={(e) => setAddFormData({ ...addFormData, userId: e.target.value })}
+                    className="flex h-10 w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  >
+                    <option value="">請選擇使用者</option>
+                    {users.map(user => (
+                      <option key={user.id} value={user.id}>
+                        {user.name} ({user.student_id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text-primary mb-2">
+                    卡片 ID <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={addFormData.rfidUid}
+                    onChange={(e) => setAddFormData({ ...addFormData, rfidUid: e.target.value })}
+                    placeholder="請輸入卡片 ID"
+                    className="font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text-primary mb-2">
+                    別名
+                  </label>
+                  <Input
+                    value={addFormData.nickname}
+                    onChange={(e) => setAddFormData({ ...addFormData, nickname: e.target.value })}
+                    placeholder="例如：學生證、悠遊卡"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                <Button
+                  variant="secondary"
+                  onClick={handleStartBinding}
+                  disabled={addSaving}
+                  className="gap-2"
+                >
+                  <QrCode className="w-4 h-4" />
+                  使用綁定模式
+                </Button>
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={handleCancelAdd}
+                    disabled={addSaving}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    onClick={handleAddCard}
+                    disabled={addSaving}
+                  >
+                    {addSaving ? '新增中...' : '新增'}
+                  </Button>
+                </div>
+              </div>
+            </div>
           )}
 
-          <div className="hidden md:block overflow-x-auto">
+          {/* 批量操作欄 */}
+          {selectedIds.size > 0 && (
+            <div className="pt-4 pb-2">
+              <BulkActionBar
+                selectedCount={selectedIds.size}
+                totalCount={filteredCards.length}
+                onClearSelection={handleClearSelection}
+                onBulkDelete={handleBulkDelete}
+                onBulkDisable={handleBulkDisable}
+                onBulkEnable={handleBulkEnable}
+                itemType="cards"
+              />
+            </div>
+          )}
+
+          <div className={`hidden md:block overflow-x-auto ${selectedIds.size > 0 ? '' : 'mt-6'}`}>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -532,7 +663,7 @@ export const CardsPage: React.FC = () => {
             </Table>
           </div>
 
-          <div className="md:hidden space-y-3">
+          <div className="md:hidden space-y-3 p-6 pt-0 mt-6">
             {filteredCards.length > 0 ? (
               filteredCards.map((card) => {
                 const isExpanded = expandedIds.has(card.id)
@@ -682,115 +813,11 @@ export const CardsPage: React.FC = () => {
             )}
           </div>
 
-          <div className="mt-4 text-sm text-text-secondary">
+          <div className="px-6 pb-6 pt-4 text-sm text-text-secondary border-t border-border">
             顯示 1-{filteredCards.length} 筆，共 {filteredCards.length} 筆記錄
           </div>
         </CardContent>
       </UICard>
-
-      {/* 新增卡片對話框 */}
-      <Dialog open={isAddDialogOpen} onOpenChange={(open) => !open && setIsAddDialogOpen(false)}>
-        <DialogContent>
-          <DialogHeader onClose={() => setIsAddDialogOpen(false)}>
-            <DialogTitle>新增卡片</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1">
-                  選擇使用者 <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={addFormData.userId}
-                  onChange={(e) => setAddFormData({ ...addFormData, userId: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
-                >
-                  <option value="">請選擇使用者</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name} ({user.student_id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="bg-gray-50 border border-border rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2 mb-3">
-                  <CreditCard className="w-5 h-5 text-accent" />
-                  <h3 className="font-medium text-text-primary">方式一：手動輸入卡片 ID</h3>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-text-primary mb-1">
-                    卡片 ID (RFID UID)
-                  </label>
-                  <Input
-                    value={addFormData.rfidUid}
-                    onChange={(e) => setAddFormData({ ...addFormData, rfidUid: e.target.value })}
-                    placeholder="例如：0546679458"
-                    className="font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-text-primary mb-1">
-                    別名（可選）
-                  </label>
-                  <Input
-                    value={addFormData.nickname}
-                    onChange={(e) => setAddFormData({ ...addFormData, nickname: e.target.value })}
-                    placeholder="例如：學生證、悠遊卡"
-                  />
-                </div>
-
-                <Button
-                  className="w-full gap-2"
-                  onClick={handleAddCard}
-                  disabled={addSaving || !addFormData.userId || !addFormData.rfidUid}
-                >
-                  <Plus className="w-4 h-4" />
-                  {addSaving ? '新增中...' : '新增卡片'}
-                </Button>
-              </div>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-text-secondary">或</span>
-                </div>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2 mb-3">
-                  <QrCode className="w-5 h-5 text-blue-600" />
-                  <h3 className="font-medium text-blue-900">方式二：啟動刷卡綁定</h3>
-                </div>
-
-                <p className="text-sm text-blue-800">
-                  系統將啟動 90 秒倒計時，請在時間內刷卡兩次完成綁定。
-                </p>
-
-                <Button
-                  variant="secondary"
-                  className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-                  onClick={handleStartBinding}
-                  disabled={addSaving || !addFormData.userId}
-                >
-                  <QrCode className="w-4 h-4" />
-                  啟動刷卡綁定模式
-                </Button>
-              </div>
-            </div>
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setIsAddDialogOpen(false)} disabled={addSaving}>
-              取消
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

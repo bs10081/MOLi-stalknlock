@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { EditPanel } from '@/components/ui/edit-panel'
 import { BulkActionBar } from '@/components/ui/bulk-action-bar'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Search, Plus, ChevronRight, CreditCard } from 'lucide-react'
 import { userService } from '@/services/userService'
 import type { User } from '@/types'
@@ -38,8 +37,8 @@ export const PersonnelPage: React.FC = () => {
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set())
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
 
-  // 新增對話框狀態
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  // 新增使用者狀態
+  const [isAddFormOpen, setIsAddFormOpen] = useState(false)
   const [addFormData, setAddFormData] = useState({
     name: '',
     student_id: '',
@@ -103,6 +102,60 @@ export const PersonnelPage: React.FC = () => {
     } catch (err: any) {
       console.error('Failed to bulk delete users:', err)
       alert(err.response?.data?.detail || '批量刪除失敗')
+    }
+  }
+
+  const handleBulkDisable = async () => {
+    if (!confirm(`確定要停用 ${selectedIds.size} 位使用者嗎？`)) return
+
+    try {
+      for (const id of Array.from(selectedIds)) {
+        const user = users.find(u => u.id === id)
+        if (user) {
+          await userService.updateUser(
+            id,
+            user.student_id,
+            user.name,
+            user.email || '',
+            user.telegram_id || '',
+            false // 設定為停用
+          )
+        }
+      }
+      await loadUsers()
+      setSelectedIds(new Set())
+      alert('批量停用成功')
+    } catch (err: any) {
+      console.error('Failed to bulk disable users:', err)
+      const errorMessage = err.response?.data?.detail || err.message || '批量停用失敗'
+      alert(typeof errorMessage === 'string' ? errorMessage : '批量停用失敗')
+    }
+  }
+
+  const handleBulkEnable = async () => {
+    if (!confirm(`確定要啟用 ${selectedIds.size} 位使用者嗎？`)) return
+
+    try {
+      for (const id of Array.from(selectedIds)) {
+        const user = users.find(u => u.id === id)
+        if (user) {
+          await userService.updateUser(
+            id,
+            user.student_id,
+            user.name,
+            user.email || '',
+            user.telegram_id || '',
+            true // 設定為啟用
+          )
+        }
+      }
+      await loadUsers()
+      setSelectedIds(new Set())
+      alert('批量啟用成功')
+    } catch (err: any) {
+      console.error('Failed to bulk enable users:', err)
+      const errorMessage = err.response?.data?.detail || err.message || '批量啟用失敗'
+      alert(typeof errorMessage === 'string' ? errorMessage : '批量啟用失敗')
     }
   }
 
@@ -209,7 +262,17 @@ export const PersonnelPage: React.FC = () => {
 
   // ========== 新增使用者邏輯 ==========
   const handleAdd = () => {
-    setIsAddDialogOpen(true)
+    setIsAddFormOpen(true)
+    setAddFormData({
+      name: '',
+      student_id: '',
+      email: '',
+      telegram_id: '',
+    })
+  }
+
+  const handleCancelAdd = () => {
+    setIsAddFormOpen(false)
     setAddFormData({
       name: '',
       student_id: '',
@@ -233,7 +296,7 @@ export const PersonnelPage: React.FC = () => {
         addFormData.telegram_id || undefined
       )
       await loadUsers()
-      setIsAddDialogOpen(false)
+      setIsAddFormOpen(false)
       setAddFormData({ name: '', student_id: '', email: '', telegram_id: '' })
     } catch (err: any) {
       console.error('Failed to create user:', err)
@@ -299,38 +362,120 @@ export const PersonnelPage: React.FC = () => {
       <PageHeader
         title="人員"
         description="管理使用者資料與卡片綁定"
-        actions={
-          <Button className="gap-2" onClick={handleAdd}>
-            <Plus className="w-4 h-4" />
-            新增使用者
-          </Button>
-        }
       />
 
       <Card>
-        <CardContent className="pt-6">
-          <div className="mb-6">
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary" />
-              <Input
-                placeholder="搜尋姓名、學號或信箱..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+        <CardContent className="p-0">
+          <div className="p-6 pb-0">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary" />
+                <Input
+                  placeholder="搜尋姓名、學號或信箱..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 h-[34px]"
+                />
+              </div>
+              <Button variant="secondary" className="flex-shrink-0 h-[34px] px-4">
+                搜尋
+              </Button>
+              <Button
+                className="gap-2 flex-shrink-0 h-[34px] px-4"
+                onClick={handleAdd}
+                style={{ backgroundColor: '#046DFF' }}
+              >
+                <Plus className="w-4 h-4" />
+                新增使用者
+              </Button>
             </div>
           </div>
 
-          {/* 批量操作欄 */}
-          {selectedIds.size > 0 && (
-            <BulkActionBar
-              selectedCount={selectedIds.size}
-              onClearSelection={handleClearSelection}
-              onBulkDelete={handleBulkDelete}
-            />
+          {/* 新增使用者展開式表單 */}
+          {isAddFormOpen && (
+            <div className="border-t border-b border-gray-200 bg-gray-50 px-6 py-6 mt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-text-primary mb-2">
+                    姓名 <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={addFormData.name}
+                    onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })}
+                    placeholder="請輸入姓名"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text-primary mb-2">
+                    學號 <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={addFormData.student_id}
+                    onChange={(e) => setAddFormData({ ...addFormData, student_id: e.target.value })}
+                    placeholder="請輸入學號"
+                    className="font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text-primary mb-2">
+                    Email
+                  </label>
+                  <Input
+                    type="email"
+                    value={addFormData.email}
+                    onChange={(e) => setAddFormData({ ...addFormData, email: e.target.value })}
+                    placeholder="請輸入 Email"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text-primary mb-2">
+                    Telegram ID
+                  </label>
+                  <Input
+                    value={addFormData.telegram_id}
+                    onChange={(e) => setAddFormData({ ...addFormData, telegram_id: e.target.value })}
+                    placeholder="請輸入 Telegram ID"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                <Button
+                  variant="secondary"
+                  onClick={handleCancelAdd}
+                  disabled={addSaving}
+                >
+                  取消
+                </Button>
+                <Button
+                  onClick={handleAddUser}
+                  disabled={addSaving}
+                >
+                  {addSaving ? '新增中...' : '新增'}
+                </Button>
+              </div>
+            </div>
           )}
 
-          <div className="hidden md:block overflow-x-auto">
+          {/* 批量操作欄 */}
+          {selectedIds.size > 0 && (
+            <div className="pt-4 pb-2">
+              <BulkActionBar
+                selectedCount={selectedIds.size}
+                totalCount={filteredUsers.length}
+                onClearSelection={handleClearSelection}
+                onBulkDelete={handleBulkDelete}
+                onBulkDisable={handleBulkDisable}
+                onBulkEnable={handleBulkEnable}
+                itemType="users"
+              />
+            </div>
+          )}
+
+          <div className={`hidden md:block overflow-x-auto ${selectedIds.size > 0 ? '' : 'mt-6'}`}>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -492,7 +637,7 @@ export const PersonnelPage: React.FC = () => {
             </Table>
           </div>
 
-          <div className="md:hidden space-y-3">
+          <div className="md:hidden space-y-3 p-6 pt-0 mt-6">
             {filteredUsers.map((user) => {
               const isExpanded = expandedIds.has(user.id)
               const formData = editFormDataMap.get(user.id)
@@ -657,77 +802,11 @@ export const PersonnelPage: React.FC = () => {
             })}
           </div>
 
-          <div className="mt-4 text-sm text-text-secondary">
+          <div className="px-6 pb-6 pt-4 text-sm text-text-secondary border-t border-border">
             顯示 1-{filteredUsers.length} 筆，共 {filteredUsers.length} 筆記錄
           </div>
         </CardContent>
       </Card>
-
-      {/* 新增使用者對話框 */}
-      <Dialog open={isAddDialogOpen} onOpenChange={(open) => !open && setIsAddDialogOpen(false)}>
-        <DialogContent>
-          <DialogHeader onClose={() => setIsAddDialogOpen(false)}>
-            <DialogTitle>新增使用者</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1">
-                  姓名 <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  value={addFormData.name}
-                  onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })}
-                  placeholder="請輸入姓名"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1">
-                  學號 <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  value={addFormData.student_id}
-                  onChange={(e) => setAddFormData({ ...addFormData, student_id: e.target.value })}
-                  placeholder="請輸入學號"
-                  className="font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1">
-                  Email
-                </label>
-                <Input
-                  type="email"
-                  value={addFormData.email}
-                  onChange={(e) => setAddFormData({ ...addFormData, email: e.target.value })}
-                  placeholder="請輸入 Email"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1">
-                  Telegram ID
-                </label>
-                <Input
-                  value={addFormData.telegram_id}
-                  onChange={(e) => setAddFormData({ ...addFormData, telegram_id: e.target.value })}
-                  placeholder="請輸入 Telegram ID"
-                />
-              </div>
-            </div>
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setIsAddDialogOpen(false)} disabled={addSaving}>
-              取消
-            </Button>
-            <Button onClick={handleAddUser} disabled={addSaving}>
-              {addSaving ? '新增中...' : '新增'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
