@@ -14,7 +14,7 @@ import { SettingsPage } from './pages/dashboard/SettingsPage'
 
 function App() {
   return (
-    <Router>
+    <Router basename="/admin">
       <Routes>
         {/* 公開頁面 */}
         <Route path="/" element={<HomePage />} />

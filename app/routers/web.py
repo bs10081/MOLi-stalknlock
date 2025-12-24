@@ -207,29 +207,10 @@ async def success(request: Request, student_id: str, db: Session = Depends(get_d
     
     # 計算卡片數量
     card_count = db.query(Card).filter(Card.user_id == user.id).count()
-    
+
     return templates.TemplateResponse("success.html", {
         "request": request,
         "user": user,
         "card_count": card_count
     })
 
-@router.get("/admin/dashboard", response_class=HTMLResponse)
-async def admin_dashboard(request: Request, admin_token: Optional[str] = Cookie(None)):
-    """管理員控制台 - Serve React SPA"""
-    import os
-    from fastapi.responses import FileResponse
-    
-    # Serve React SPA (React 會自己處理登入狀態)
-    if os.path.exists("frontend/dist/index.html"):
-        return FileResponse("frontend/dist/index.html")
-    
-    # Fallback: 如果沒有前端構建，使用舊版模板
-    current_admin = get_current_admin(admin_token)
-    if not current_admin:
-        return RedirectResponse(url="/", status_code=302)
-    
-    return templates.TemplateResponse("admin/dashboard.html", {
-        "request": request,
-        "admin": current_admin
-    })
