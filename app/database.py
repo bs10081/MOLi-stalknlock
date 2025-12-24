@@ -51,12 +51,16 @@ class AccessLog(Base):
 
 class RegistrationSession(Base):
     __tablename__ = "registration_sessions"
-    
+
     user_id = Column(String(36), ForeignKey("users.id"), primary_key=True)
     first_uid = Column(String(50), nullable=True)
     step = Column(Integer, default=0)
     expires_at = Column(TIMESTAMP(timezone=True), nullable=True)
     initial_card_count = Column(Integer, default=0)  # 記錄開始綁定時的卡片數量
+    completed = Column(Boolean, default=False, nullable=False)  # 標記綁定是否完成
+
+    # Relationship
+    user = relationship("User")
 
 class Admin(Base):
     __tablename__ = "admins"

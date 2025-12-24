@@ -24,23 +24,32 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# Application state
-app_state = {
-    "mode": "NORMAL",  # NORMAL or REGISTER
-    "target_student_id": None,
-    "first_scan_uid": None,
-    "step": 0,
-    "start_time": 0
-}
-
 async def handle_rfid_scan(card_uid: str):
     """Handle RFID card scan based on current mode"""
-    log.info(f"📇 Card scanned: {card_uid}")
-    
-    if app_state["mode"] == "NORMAL":
-        await handle_normal_mode(card_uid)
-    elif app_state["mode"] == "REGISTER":
-        await handle_register_mode(card_uid)
+    try:
+        log.info(f"📇 Card scanned: {card_uid}")
+
+        # 查詢資料庫決定當前模式
+        db = next(get_db())
+        try:
+            # 檢查是否有未過期且未完成的 RegistrationSession
+            now = datetime.utcnow()
+            active_session = db.query(RegistrationSession).filter(
+                RegistrationSession.expires_at > now,
+                RegistrationSession.completed == False
+            ).first()
+
+            if active_session:
+                # 進入註冊模式
+                await handle_register_mode(card_uid)
+            else:
+                # 進入正常模式
+                await handle_normal_mode(card_uid)
+        finally:
+            db.close()
+
+    except Exception as e:
+        log.error(f"❌ Error handling RFID scan: {e}", exc_info=True)
 
 async def handle_normal_mode(card_uid: str):
     """Handle card scan in normal access control mode (支援一人多卡)"""
@@ -98,36 +107,41 @@ async def handle_normal_mode(card_uid: str):
 
 async def handle_register_mode(card_uid: str):
     """Handle card scan in registration mode (支援一人多卡)"""
-    # Check timeout
-    if (datetime.utcnow().timestamp() - app_state["start_time"]) > 90:
-        log.info("⏰ Registration timeout, returning to normal mode")
-        app_state["mode"] = "NORMAL"
-        return
-    
     log.info(f"📝 [Registration] Card scanned: {card_uid}")
-    
+
     db = next(get_db())
     try:
-        user = db.query(User).filter(User.student_id == app_state["target_student_id"]).first()
-        if not user:
-            log.error(f"❌ User not found: {app_state['target_student_id']}")
-            app_state["mode"] = "NORMAL"
-            return
-        
+        # 查詢未過期且未完成的 RegistrationSession
+        now = datetime.utcnow()
         session = db.query(RegistrationSession).filter(
-            RegistrationSession.user_id == user.id
+            RegistrationSession.expires_at > now,
+            RegistrationSession.completed == False
         ).first()
-        
+
         if not session:
-            log.error("❌ No registration session found")
-            app_state["mode"] = "NORMAL"
+            log.error("❌ No active registration session found")
             return
-        
+
+        # 檢查是否超時
+        if session.expires_at <= now:
+            log.info("⏰ Registration timeout, marking session as expired")
+            session.completed = True
+            db.commit()
+            return
+
+        # 取得關聯的使用者
+        user = session.user
+        if not user:
+            log.error(f"❌ User not found for session")
+            session.completed = True
+            db.commit()
+            return
+
         # First scan
         if session.step == 0:
-            # Check if card already bound to ANOTHER user
+            # 檢查卡片是否已被其他使用者綁定
             existing_card = db.query(Card).filter(Card.rfid_uid == card_uid).first()
-            
+
             if existing_card and existing_card.user_id != user.id:
                 log.warning(f"⚠️ Card already bound to {existing_card.user.student_id}")
                 asyncio.create_task(asyncio.to_thread(
@@ -135,16 +149,17 @@ async def handle_register_mode(card_uid: str):
                     f"⚠️ 綁定失敗：卡片已被 {existing_card.user.student_id} 使用"
                 ))
                 return
-            
-            # 如果是同一個用戶重複綁定同一張卡（允許重新綁定）
+
+            # 如果是同一個使用者重複綁定同一張卡（允許重新綁定）
             if existing_card and existing_card.user_id == user.id:
                 log.info(f"ℹ️ Card already belongs to this user, allowing re-bind")
-            
+
+            # 記錄第一次刷卡的 UID
             session.first_uid = card_uid
             session.step = 1
             db.commit()
             log.info(f"📝 First scan OK, please scan again to confirm")
-        
+
         # Second scan
         elif session.step == 1:
             if session.first_uid == card_uid:
@@ -153,7 +168,7 @@ async def handle_register_mode(card_uid: str):
                     Card.rfid_uid == card_uid,
                     Card.user_id == user.id
                 ).first()
-                
+
                 if existing_card:
                     log.info(f"ℹ️ Card already exists, updating...")
                 else:
@@ -166,26 +181,24 @@ async def handle_register_mode(card_uid: str):
                         nickname=None  # 可以之後通過 API 更新
                     )
                     db.add(new_card)
-                
-                db.delete(session)
+
+                # 標記 session 為已完成（而非刪除）
+                session.completed = True
                 db.commit()
-                
-                # 計算用戶總卡片數
+
+                # 計算使用者總卡片數
                 card_count = db.query(Card).filter(Card.user_id == user.id).count()
-                
+
                 log.info(f"🎉 Card bound: {user.student_id} -> {card_uid} (總共 {card_count} 張卡片)")
-                
+
                 # 立即開門慶祝
                 open_lock()
-                
+
                 # Telegram 通知改為非阻塞
                 asyncio.create_task(asyncio.to_thread(
                     send_telegram,
                     f"綁定成功：{user.name} ({user.student_id})\n現在有 {card_count} 張卡片"
                 ))
-                
-                # Return to normal mode
-                app_state["mode"] = "NORMAL"
             else:
                 log.warning(f"❌ Card mismatch, resetting")
                 session.first_uid = None
@@ -257,11 +270,11 @@ app.include_router(api.router)
 @app.post("/mode/register")
 async def switch_to_register_mode(student_id: str, db: Session = Depends(get_db)):
     """Switch system to registration mode for a specific student"""
-    # 查詢或創建用戶
+    # 查詢或創建使用者
     user = db.query(User).filter(User.student_id == student_id).first()
     if not user:
         log.error(f"❌ User not found: {student_id}")
-        return {"status": "error", "message": "用戶不存在"}
+        return {"status": "error", "message": "使用者不存在"}
 
     # 計算當前卡片數量
     initial_card_count = db.query(Card).filter(Card.user_id == user.id).count()
@@ -272,27 +285,25 @@ async def switch_to_register_mode(student_id: str, db: Session = Depends(get_db)
     ).first()
 
     if session:
+        # 更新現有 session
         session.first_uid = None
         session.step = 0
         session.expires_at = datetime.utcnow() + timedelta(seconds=90)
         session.initial_card_count = initial_card_count
+        session.completed = False  # 重置為未完成
     else:
+        # 創建新 session
         session = RegistrationSession(
             user_id=user.id,
             first_uid=None,
             step=0,
             expires_at=datetime.utcnow() + timedelta(seconds=90),
-            initial_card_count=initial_card_count
+            initial_card_count=initial_card_count,
+            completed=False
         )
         db.add(session)
 
     db.commit()
-
-    # Switch to REGISTER mode
-    app_state["mode"] = "REGISTER"
-    app_state["target_student_id"] = student_id
-    app_state["step"] = 0
-    app_state["start_time"] = datetime.utcnow().timestamp()
 
     log.info(f"🔄 Switched to REGISTER mode for {student_id} (initial cards: {initial_card_count})")
     return {"status": "ok", "message": "請刷卡"}

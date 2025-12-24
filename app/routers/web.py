@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from typing import Optional
 import logging
-import requests
+from datetime import datetime, timedelta
 
 from app.database import get_db, User, Card, Admin, RegistrationSession
 from app.services.telegram import send_telegram
@@ -140,21 +140,34 @@ async def register_post(
         message = f"新註冊待綁定：{name} ({student_id})\n操作者：{current_admin['name']}"
     
     background_tasks.add_task(send_telegram, message)
-    
-    # Switch to registration mode (立即執行，不等待 Telegram)
-    try:
-        response = requests.post(
-            "http://localhost:8000/mode/register",
-            params={"student_id": student_id},
-            timeout=2
+
+    # 直接創建 RegistrationSession（與 main.py 的 switch_to_register_mode 相同邏輯）
+    initial_card_count = db.query(Card).filter(Card.user_id == user.id).count()
+
+    session = db.query(RegistrationSession).filter(
+        RegistrationSession.user_id == user.id
+    ).first()
+
+    if session:
+        session.first_uid = None
+        session.step = 0
+        session.expires_at = datetime.utcnow() + timedelta(seconds=90)
+        session.initial_card_count = initial_card_count
+        session.completed = False
+    else:
+        session = RegistrationSession(
+            user_id=user.id,
+            first_uid=None,
+            step=0,
+            expires_at=datetime.utcnow() + timedelta(seconds=90),
+            initial_card_count=initial_card_count,
+            completed=False
         )
-        if response.status_code == 200:
-            log.info(f"✅ Switched to registration mode for {student_id}")
-        else:
-            log.error(f"Failed to switch to registration mode: {response.status_code}")
-    except Exception as e:
-        log.error(f"Error calling /mode/register: {e}")
-    
+        db.add(session)
+
+    db.commit()
+    log.info(f"✅ Registration session created for {student_id}")
+
     card_count = db.query(Card).filter(Card.user_id == user.id).count()
     if card_count > 0:
         message = f"{name} 同學，請在90秒內刷新卡片兩次完成副卡綁定（目前已有 {card_count} 張卡片）"
@@ -172,26 +185,43 @@ async def check_status(student_id: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.student_id == student_id).first()
     if not user:
         return {"bound": False, "card_count": 0, "binding_in_progress": False}
-    
+
     # 查詢當前卡片數量
     current_card_count = db.query(Card).filter(Card.user_id == user.id).count()
-    
+
     # 查詢 registration session
     session = db.query(RegistrationSession).filter(
         RegistrationSession.user_id == user.id
     ).first()
-    
+
     if session:
-        # 有進行中的 session，檢查卡片數量是否增加
-        binding_completed = current_card_count > session.initial_card_count
+        # 檢查 session 是否已完成
+        if session.completed:
+            return {
+                "bound": True,
+                "card_count": current_card_count,
+                "binding_in_progress": False,
+                "initial_count": session.initial_card_count
+            }
+
+        # 檢查是否過期
+        if session.expires_at and session.expires_at < datetime.utcnow():
+            return {
+                "bound": False,
+                "card_count": current_card_count,
+                "binding_in_progress": False,
+                "initial_count": session.initial_card_count
+            }
+
+        # 進行中
         return {
-            "bound": binding_completed,
+            "bound": False,
             "card_count": current_card_count,
             "binding_in_progress": True,
             "initial_count": session.initial_card_count
         }
     else:
-        # 沒有 session，返回當前狀態
+        # 沒有 session
         return {
             "bound": current_card_count > 0,
             "card_count": current_card_count,
