@@ -5,6 +5,8 @@ export interface RegistrationStatus {
   binding_in_progress?: boolean
   card_count?: number
   initial_count?: number
+  step?: number
+  status_message?: string
 }
 
 export const registerService = {

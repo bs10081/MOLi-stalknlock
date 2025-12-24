@@ -8,6 +8,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { registerService } from '@/services/registerService'
 import { userService } from '@/services/userService'
+import { CreditCard, CheckCircle } from 'lucide-react'
 
 export const RegisterPage: React.FC = () => {
   const [searchParams] = useSearchParams()
@@ -22,6 +23,7 @@ export const RegisterPage: React.FC = () => {
   const [modalTitle, setModalTitle] = useState('處理中')
   const [isSuccess, setIsSuccess] = useState(false)
   const [countdown, setCountdown] = useState(90)
+  const [currentStep, setCurrentStep] = useState(0) // 0: 等待第一次, 1: 等待第二次, 2: 完成
   const [currentUser, setCurrentUser] = useState<{ name: string; student_id: string } | null>(null)
   const navigate = useNavigate()
   const pollIntervalRef = useRef<number | null>(null)
@@ -73,6 +75,7 @@ export const RegisterPage: React.FC = () => {
 
   const startPolling = (studentId: string) => {
     setCountdown(90)
+    setCurrentStep(0)
     setModalStatus('請在 90 秒內刷卡兩次...')
 
     countdownIntervalRef.current = window.setInterval(() => {
@@ -89,6 +92,17 @@ export const RegisterPage: React.FC = () => {
     pollIntervalRef.current = window.setInterval(async () => {
       try {
         const status = await registerService.checkStatus(studentId)
+
+        // 更新當前步驟
+        if (status.step !== undefined) {
+          setCurrentStep(status.step)
+        }
+
+        // 更新狀態訊息
+        if (status.status_message) {
+          setModalStatus(status.status_message)
+        }
+
         if (
           status.bound &&
           (!status.binding_in_progress ||
@@ -98,6 +112,7 @@ export const RegisterPage: React.FC = () => {
         ) {
           clearIntervals()
           setIsSuccess(true)
+          setCurrentStep(2)
           setModalTitle('綁定完成')
           setModalStatus(`歡迎解鎖門禁（已綁定 ${status.card_count} 張卡片）`)
           setTimeout(() => {
@@ -248,9 +263,61 @@ export const RegisterPage: React.FC = () => {
               {modalTitle}
             </h2>
 
+            {/* 步驟指示器 */}
             {!isSuccess &&
               !modalTitle.includes('逾時') &&
-              !modalTitle.includes('錯誤') && <Spinner />}
+              !modalTitle.includes('錯誤') && (
+                <div className="w-full max-w-xs">
+                  <div className="flex items-center justify-between mb-4">
+                    {/* 步驟 1 */}
+                    <div className="flex flex-col items-center flex-1">
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                          currentStep >= 1
+                            ? 'bg-green-500 text-white'
+                            : currentStep === 0
+                            ? 'bg-blue-500 text-white animate-pulse'
+                            : 'bg-gray-200 text-gray-400'
+                        }`}
+                      >
+                        {currentStep >= 1 ? (
+                          <CheckCircle className="w-6 h-6" />
+                        ) : (
+                          <CreditCard className="w-6 h-6" />
+                        )}
+                      </div>
+                      <span className="text-xs mt-2 text-center">第一次刷卡</span>
+                    </div>
+
+                    {/* 連接線 */}
+                    <div
+                      className={`h-1 flex-1 mx-2 transition-all ${
+                        currentStep >= 1 ? 'bg-green-500' : 'bg-gray-200'
+                      }`}
+                    />
+
+                    {/* 步驟 2 */}
+                    <div className="flex flex-col items-center flex-1">
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                          currentStep >= 2
+                            ? 'bg-green-500 text-white'
+                            : currentStep === 1
+                            ? 'bg-blue-500 text-white animate-pulse'
+                            : 'bg-gray-200 text-gray-400'
+                        }`}
+                      >
+                        {currentStep >= 2 ? (
+                          <CheckCircle className="w-6 h-6" />
+                        ) : (
+                          <CreditCard className="w-6 h-6" />
+                        )}
+                      </div>
+                      <span className="text-xs mt-2 text-center">第二次刷卡</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
             {isSuccess && (
               <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
@@ -271,8 +338,8 @@ export const RegisterPage: React.FC = () => {
             )}
 
             <div
-              className={`text-center ${
-                isSuccess ? 'text-green-700 font-semibold': 'text-text-secondary'
+              className={`text-center text-lg font-medium ${
+                isSuccess ? 'text-green-700': currentStep === 1 ? 'text-blue-600' : 'text-text-secondary'
               }`}
             >
               {modalStatus}

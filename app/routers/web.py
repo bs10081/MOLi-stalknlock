@@ -201,7 +201,9 @@ async def check_status(student_id: str, db: Session = Depends(get_db)):
                 "bound": True,
                 "card_count": current_card_count,
                 "binding_in_progress": False,
-                "initial_count": session.initial_card_count
+                "initial_count": session.initial_card_count,
+                "step": 2,
+                "status_message": "綁定完成"
             }
 
         # 檢查是否過期
@@ -210,15 +212,26 @@ async def check_status(student_id: str, db: Session = Depends(get_db)):
                 "bound": False,
                 "card_count": current_card_count,
                 "binding_in_progress": False,
-                "initial_count": session.initial_card_count
+                "initial_count": session.initial_card_count,
+                "step": session.step,
+                "status_message": "綁定逾時"
             }
 
         # 進行中
+        if session.step == 0:
+            status_msg = "請刷卡第一次"
+        elif session.step == 1:
+            status_msg = "很好！請再刷一次相同的卡片"
+        else:
+            status_msg = "處理中..."
+
         return {
             "bound": False,
             "card_count": current_card_count,
             "binding_in_progress": True,
-            "initial_count": session.initial_card_count
+            "initial_count": session.initial_card_count,
+            "step": session.step,
+            "status_message": status_msg
         }
     else:
         # 沒有 session
