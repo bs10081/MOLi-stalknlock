@@ -157,7 +157,7 @@ export const UsersPage: React.FC = () => {
         }
 
         // 檢查綁定完成
-        if (data.bound && data.card_count > (initialCount ?? 0)) {
+        if (data.bound && data.card_count !== undefined && data.card_count > (initialCount ?? 0)) {
           clearRegisterIntervals()
           setRegisterStatus('success')
           setRegisterMessage('綁定成功！')
