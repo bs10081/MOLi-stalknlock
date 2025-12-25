@@ -947,41 +947,41 @@ export const CardsPage: React.FC = () => {
             <div className="flex flex-col items-center space-y-8 py-6">
               {/* 步驟指示器 */}
               {bindingStatus === 'binding' && (
-                <div className="flex items-center w-full max-w-[200px]">
+                <div className="flex items-center w-full max-w-xs">
                   {/* 步驟 1 */}
-                  <div className="flex flex-col items-center">
+                  <div className="flex flex-col items-center flex-1">
                     <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-all",
+                      "w-10 h-10 rounded-full flex items-center justify-center text-base font-medium border-2 transition-all mb-2",
                       bindingStep >= 1
                         ? "bg-success text-white border-success"
                         : bindingStep === 0
                           ? "bg-accent text-white border-accent"
                           : "bg-white text-text-secondary border-border"
                     )}>
-                      {bindingStep >= 1 ? <Check className="w-4 h-4" /> : "1"}
+                      {bindingStep >= 1 ? <Check className="w-5 h-5" /> : "1"}
                     </div>
-                    <span className="text-xs mt-1.5 text-text-secondary">刷卡 1</span>
+                    <span className="text-sm text-text-secondary">刷卡 1</span>
                   </div>
 
                   {/* 連接線 */}
                   <div className={cn(
-                    "flex-1 h-1 rounded-full mx-3 -mt-5",
+                    "flex-1 h-1 rounded-full mx-4 mb-7",
                     bindingStep >= 1 ? "bg-success" : "bg-border"
                   )} />
 
                   {/* 步驟 2 */}
-                  <div className="flex flex-col items-center">
+                  <div className="flex flex-col items-center flex-1">
                     <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-all",
+                      "w-10 h-10 rounded-full flex items-center justify-center text-base font-medium border-2 transition-all mb-2",
                       bindingStep >= 2
                         ? "bg-success text-white border-success"
                         : bindingStep === 1
                           ? "bg-accent text-white border-accent"
                           : "bg-white text-text-secondary border-border"
                     )}>
-                      {bindingStep >= 2 ? <Check className="w-4 h-4" /> : "2"}
+                      {bindingStep >= 2 ? <Check className="w-5 h-5" /> : "2"}
                     </div>
-                    <span className="text-xs mt-1.5 text-text-secondary">刷卡 2</span>
+                    <span className="text-sm text-text-secondary">刷卡 2</span>
                   </div>
                 </div>
               )}
