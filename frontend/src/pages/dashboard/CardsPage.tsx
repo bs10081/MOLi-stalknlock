@@ -12,6 +12,7 @@ import { BulkActionBar } from '@/components/ui/bulk-action-bar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Search, Plus, X, ChevronRight, CreditCard, QrCode, CheckCircle } from 'lucide-react'
 import { Meter, MeterIndicator, MeterLabel, MeterTrack, MeterValue } from '@/components/ui/meter'
+import { Spinner } from '@/components/ui/spinner'
 import { userService } from '@/services/userService'
 import { registerService } from '@/services/registerService'
 import type { Card, User } from '@/types'
@@ -934,7 +935,7 @@ export const CardsPage: React.FC = () => {
 
       {/* 綁定模式 Dialog */}
       <Dialog open={isBindingDialogOpen} onOpenChange={handleBindingDialogClose}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>
               {bindingStatus === 'success' ? '綁定完成' :
@@ -986,9 +987,12 @@ export const CardsPage: React.FC = () => {
 
               {/* 倒數計時 */}
               {bindingStatus === 'binding' && bindingCountdown > 0 && (
-                <div className="text-3xl font-mono font-bold text-text-primary tracking-wider">
-                  {String(Math.floor(bindingCountdown / 60)).padStart(2, '0')}:
-                  {String(bindingCountdown % 60).padStart(2, '0')}
+                <div className="flex items-center gap-4">
+                  <Spinner size="sm" />
+                  <div className="text-3xl font-mono font-bold text-text-primary tracking-wider">
+                    {String(Math.floor(bindingCountdown / 60)).padStart(2, '0')}:
+                    {String(bindingCountdown % 60).padStart(2, '0')}
+                  </div>
                 </div>
               )}
             </div>

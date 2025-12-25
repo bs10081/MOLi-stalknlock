@@ -34,7 +34,7 @@ function MeterLabel({ className, ...props }: MeterPrimitive.Label.Props) {
 function MeterTrack({ className, ...props }: MeterPrimitive.Track.Props) {
   return (
     <MeterPrimitive.Track
-      className={cn("block h-2 w-full overflow-hidden bg-input", className)}
+      className={cn("block h-2 w-full overflow-hidden rounded-full bg-border", className)}
       data-slot="meter-track"
       {...props}
     />
@@ -47,7 +47,7 @@ function MeterIndicator({
 }: MeterPrimitive.Indicator.Props) {
   return (
     <MeterPrimitive.Indicator
-      className={cn("bg-primary transition-all duration-500", className)}
+      className={cn("bg-accent transition-all duration-500 h-full", className)}
       data-slot="meter-indicator"
       {...props}
     />
