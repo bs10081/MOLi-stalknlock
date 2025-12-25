@@ -407,7 +407,13 @@ export const CardsPage: React.FC = () => {
       // 啟動輪詢
       startBindingPolling(user.student_id)
     } catch (err: any) {
-      alert(err.response?.data?.detail || '啟動綁定模式失敗')
+      const detail = err.response?.data?.detail
+      const errorMessage = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((d: any) => d.msg).join(', ')
+          : '啟動綁定模式失敗'
+      alert(errorMessage)
     } finally {
       setAddSaving(false)
     }

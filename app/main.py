@@ -4,7 +4,7 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -271,7 +271,11 @@ app.include_router(api.router)
 
 # Endpoint to switch to registration mode (called by web frontend)
 @app.post("/mode/register")
-async def switch_to_register_mode(student_id: str, nickname: str = None, db: Session = Depends(get_db)):
+async def switch_to_register_mode(
+    student_id: str = Form(...),
+    nickname: str = Form(None),
+    db: Session = Depends(get_db)
+):
     """Switch system to registration mode for a specific student (支援卡片別名)"""
     # 查詢或創建使用者
     user = db.query(User).filter(User.student_id == student_id).first()
