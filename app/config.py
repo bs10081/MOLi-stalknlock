@@ -3,6 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Development Mode
+DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
+
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./moli_door.db")
 

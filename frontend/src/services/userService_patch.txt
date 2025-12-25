@@ -1,0 +1,11 @@
+  updateUser: async (id: string, student_id: string, name: string, email?: string) => {
+    const formData = new FormData()
+    formData.append('student_id', student_id)
+    formData.append('name', name)
+    if (email !== undefined) formData.append('email', email || '')
+    return api.put(`/admin/users/${id}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },

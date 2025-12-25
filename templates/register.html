@@ -1,91 +1,85 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MOLI 門禁註冊</title>
+  <title>MOLi 門禁註冊</title>
   <link rel="stylesheet" href="/static/style.css" />
   <style>
     .admin-bar {
-      background: #f8f9fa;
-      padding: 10px 20px;
-      border-bottom: 1px solid #dee2e6;
+      background: var(--bg-card);
+      padding: var(--space-3) var(--space-6);
+      border-bottom: 1px solid var(--border-color);
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    
+
     .admin-info {
-      color: #495057;
+      color: var(--text-secondary);
       font-size: 14px;
     }
-    
+
     .admin-info strong {
-      color: #212529;
+      color: var(--text-primary);
     }
-    
+
+    .admin-actions {
+      display: flex;
+      gap: var(--space-2);
+    }
+
+    .btn-dashboard,
     .btn-logout {
-      padding: 6px 16px;
-      background: #dc3545;
+      padding: var(--space-2) var(--space-4);
+      background: var(--accent);
       color: white;
       border: none;
-      border-radius: 4px;
+      border-radius: var(--radius-md);
       cursor: pointer;
       font-size: 14px;
+      text-decoration: none;
+      transition: background 0.15s ease;
     }
-    
+
+    .btn-logout {
+      background: var(--danger);
+    }
+
+    .btn-dashboard:hover {
+      background: #1d4ed8;
+    }
+
     .btn-logout:hover {
-      background: #c82333;
+      background: #b91c1c;
     }
-    
-    /* Enhanced loading animation */
-    .spinner {
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #3498db;
-      border-radius: 50%;
-      width: 50px;
-      height: 50px;
-      animation: spin 1s linear infinite;
-      margin: 20px auto;
-    }
-    
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    
-    .status-text {
-      font-size: 16px;
-      color: #555;
-      margin-top: 10px;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-    
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-    
+
+    /* Progress bar for loading state */
     .progress-bar {
       width: 100%;
       height: 4px;
-      background: #e0e0e0;
+      background: var(--border-color);
       border-radius: 2px;
       overflow: hidden;
-      margin-top: 15px;
+      margin-top: var(--space-4);
     }
-    
+
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #3498db, #2ecc71);
+      background: var(--accent);
       animation: progress 2s ease-in-out infinite;
     }
-    
+
     @keyframes progress {
       0% { width: 0%; }
       50% { width: 70%; }
       100% { width: 100%; }
+    }
+
+    .status-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: var(--space-4);
     }
   </style>
 </head>
@@ -96,16 +90,19 @@
     {% if admin %}
     <div class="admin-bar">
       <div class="admin-info">
-        👤 管理員：<strong>{{ admin.name }}</strong> ({{ admin.sub }})
+        管理員：<strong>{{ admin.name }}</strong> ({{ admin.sub }})
       </div>
-      <button class="btn-logout" onclick="logout()">登出</button>
+      <div class="admin-actions">
+        <a href="/admin/dashboard" class="btn-dashboard">管理界面</a>
+        <button class="btn-logout" onclick="logout()">登出</button>
+      </div>
     </div>
     {% endif %}
-    
+
     <header class="moli-header">
       <div class="brand">
         <span class="brand-mark"></span>
-        <span>MOLI 門禁系統</span>
+        <span>MOLi 門禁系統</span>
       </div>
       <div class="lab-tag">Makers' Open Lab for Innovation</div>
     </header>
@@ -118,8 +115,8 @@
         </div>
 
         {% if error %}
-        <div style="color: #dc3545; padding: 10px; background: #f8d7da; border-radius: 6px; margin-bottom: 15px;">
-          ⚠️ {{ error }}
+        <div class="error">
+          {{ error }}
         </div>
         {% endif %}
 
@@ -131,32 +128,33 @@
           <input type="text" id="name" name="name" required />
 
           <button type="submit">送出註冊</button>
-          <div class="error" id="errorMsg"></div>
+          <div class="error" id="errorMsg" style="display:none;"></div>
         </form>
       </div>
     </main>
+
     <footer class="moli-footer">
-      © MOLI – Makers' Open Lab for Innovation
+      © MOLi – Makers' Open Lab for Innovation
     </footer>
   </div>
 
+  <!-- Loading Modal -->
   <div id="loadingModal" class="loading-modal">
     <div class="loading-card">
       <div class="modal-title" id="modalTitle">處理中</div>
 
       <div class="spinner" id="loadingSpinner"></div>
-      <div class="success-icon" id="successIcon" style="display: none;">✅</div>
+      <div class="success-icon" id="successIcon" style="display: none;">✓</div>
 
       <div class="scan-status" id="scanStatus">
         正在建立資料並通知系統...
       </div>
-      
-      <div class="progress-bar" id="progressBar">
+
+      <div class="progress-bar" id="progressBar" style="display:none;">
         <div class="progress-fill"></div>
       </div>
-      
-      <div class="status-text" id="statusText">請稍候</div>
-      <div id="successMsg" style="display:none; margin-top:10px; text-align:center;"></div>
+
+      <div class="status-text" id="statusText"></div>
     </div>
   </div>
 
@@ -181,10 +179,11 @@
 
       if (!student_id || !name) {
         errorMsg.textContent = "請填寫學號與姓名";
+        errorMsg.style.display = "block";
         return;
       }
 
-      errorMsg.textContent = "";
+      errorMsg.style.display = "none";
       const formData = new FormData();
       formData.append("student_id", student_id);
       formData.append("name", name);
@@ -196,7 +195,7 @@
       const scanStatus = document.getElementById("scanStatus");
       const statusText = document.getElementById("statusText");
       const progressBar = document.getElementById("progressBar");
-      
+
       modal.style.display = "block";
       spinner.style.display = "block";
       successIcon.style.display = "none";
@@ -209,11 +208,10 @@
 
         if (resp.ok) {
           const data = await resp.json();
-          // 更新狀態：準備刷卡
           scanStatus.textContent = data.message || "請在 90 秒內刷卡兩次...";
           statusText.textContent = "等待刷卡";
           progressBar.style.display = "none";
-          
+
           // 開始 polling
           startPolling(student_id);
         } else {
@@ -225,18 +223,19 @@
             msg = await resp.text() || msg;
           }
           errorMsg.textContent = msg;
+          errorMsg.style.display = "block";
           modal.style.display = "none";
         }
       } catch (err) {
         console.error(err);
         errorMsg.textContent = "連線錯誤，請檢查網路";
+        errorMsg.style.display = "block";
         modal.style.display = "none";
       }
     });
 
     function startPolling(student_id) {
       const scanStatus = document.getElementById("scanStatus");
-      const successMsg = document.getElementById("successMsg");
       const spinner = document.getElementById("loadingSpinner");
       const successIcon = document.getElementById("successIcon");
       const modalTitle = document.getElementById("modalTitle");
@@ -252,20 +251,19 @@
           if (!res.ok) throw new Error("Status check failed");
           const data = await res.json();
 
-          // 檢查是否已綁定卡片（支援副卡檢測）
-          if (data.bound && data.card_count > data.initial_count) {
+          // 檢查是否已綁定卡片
+          if (data.bound && (!data.binding_in_progress || (data.initial_count !== undefined && data.card_count > data.initial_count))) {
             clearInterval(intervalId);
             spinner.style.display = "none";
             successIcon.style.display = "block";
-            successIcon.style.fontSize = "40px";
-            successIcon.style.margin = "10px auto";
+            successIcon.style.color = "var(--success)";
 
-            modalTitle.textContent = "綁定完成！";
-            modalTitle.style.color = "#22c55e";
+            modalTitle.textContent = "綁定完成";
+            modalTitle.style.color = "var(--success)";
 
-            scanStatus.textContent = `歡迎進入 MOLI 實驗室（已綁定 ${data.card_count} 張卡片）`;
+            scanStatus.textContent = `歡迎解鎖門禁（已綁定 ${data.card_count} 張卡片）`;
             scanStatus.style.fontWeight = "bold";
-            scanStatus.style.color = "#22c55e";
+            scanStatus.style.color = "var(--success)";
             statusText.style.display = "none";
 
             setTimeout(() => {
@@ -273,26 +271,27 @@
             }, 1500);
             return;
           }
-          
-          // 更新狀態文字
-          if (attempts % 5 === 0) {
-            statusText.textContent = `等待刷卡中... (${Math.floor((maxAttempts - attempts) * 2 / 60)} 分 ${(maxAttempts - attempts) * 2 % 60} 秒)`;
-          }
+
+          // 更新倒數計時
+          const remaining = maxAttempts - attempts;
+          const minutes = Math.floor((remaining * 2) / 60);
+          const seconds = (remaining * 2) % 60;
+          statusText.textContent = `等待刷卡中... (${minutes} 分 ${seconds} 秒)`;
 
           // 逾時處理
           if (attempts >= maxAttempts) {
             clearInterval(intervalId);
             spinner.style.display = "none";
-            scanStatus.textContent = "❌ 刷卡逾時，請重新整理頁面再試。";
-            scanStatus.style.color = "red";
+            scanStatus.textContent = "刷卡逾時，請重新整理頁面再試";
+            scanStatus.style.color = "var(--danger)";
             statusText.style.display = "none";
           }
         } catch (e) {
           console.error("輪詢錯誤", e);
           clearInterval(intervalId);
           spinner.style.display = "none";
-          scanStatus.textContent = "❌ 連線錯誤，請重新整理頁面再試。";
-          scanStatus.style.color = "red";
+          scanStatus.textContent = "連線錯誤，請重新整理頁面再試";
+          scanStatus.style.color = "var(--danger)";
           statusText.style.display = "none";
         }
       }, 2000);
@@ -300,5 +299,4 @@
   </script>
 
 </body>
-
 </html>
