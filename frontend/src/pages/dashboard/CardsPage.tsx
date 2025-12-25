@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card as UICard, CardContent } from '@/components/ui/card'
@@ -9,8 +9,10 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { EditPanel } from '@/components/ui/edit-panel'
 import { BulkActionBar } from '@/components/ui/bulk-action-bar'
-import { Search, Plus, X, ChevronRight, CreditCard, QrCode } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
+import { Search, Plus, X, ChevronRight, CreditCard, QrCode, CheckCircle } from 'lucide-react'
 import { userService } from '@/services/userService'
+import { registerService } from '@/services/registerService'
 import type { Card, User } from '@/types'
 
 interface CardWithUser extends Card {
@@ -49,10 +51,26 @@ export const CardsPage: React.FC = () => {
   })
   const [addSaving, setAddSaving] = useState(false)
 
+  // ========== 綁定 Dialog 狀態 ==========
+  const [isBindingDialogOpen, setIsBindingDialogOpen] = useState(false)
+  const [bindingStatus, setBindingStatus] = useState<'idle' | 'binding' | 'success' | 'timeout' | 'error'>('idle')
+  const [bindingStep, setBindingStep] = useState(0)
+  const [bindingCountdown, setBindingCountdown] = useState(90)
+  const [bindingMessage, setBindingMessage] = useState('')
+
+  // Refs 管理定時器
+  const pollIntervalRef = useRef<number | null>(null)
+  const countdownIntervalRef = useRef<number | null>(null)
+
   const userIdFilter = searchParams.get('user')
 
   useEffect(() => {
     loadData()
+  }, [])
+
+  // Cleanup: 元件卸載時清除定時器
+  useEffect(() => {
+    return () => clearBindingIntervals()
   }, [])
 
   const loadData = async () => {
@@ -288,6 +306,80 @@ export const CardsPage: React.FC = () => {
     }
   }
 
+  // ========== 綁定 Dialog 輔助函式 ==========
+  // 清除定時器
+  const clearBindingIntervals = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+      pollIntervalRef.current = null
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
+      countdownIntervalRef.current = null
+    }
+  }
+
+  // 啟動輪詢
+  const startBindingPolling = (studentId: string) => {
+    // 倒數計時
+    countdownIntervalRef.current = window.setInterval(() => {
+      setBindingCountdown((prev) => {
+        if (prev <= 1) {
+          clearBindingIntervals()
+          setBindingStatus('timeout')
+          setBindingMessage('刷卡逾時，請重新嘗試')
+          return 0
+        }
+        return prev - 2
+      })
+    }, 2000)
+
+    // 輪詢狀態
+    pollIntervalRef.current = window.setInterval(async () => {
+      try {
+        const status = await registerService.checkStatus(studentId)
+        if (status.step !== undefined) setBindingStep(status.step)
+        if (status.status_message) setBindingMessage(status.status_message)
+
+        // 完成判斷
+        if (status.bound && (!status.binding_in_progress ||
+            (status.initial_count !== undefined && status.card_count && status.card_count > status.initial_count))) {
+          clearBindingIntervals()
+          setBindingStep(2)
+          setBindingStatus('success')
+          setBindingMessage(`卡片綁定成功（共 ${status.card_count} 張卡片）`)
+          await loadData()
+        }
+      } catch (err) {
+        clearBindingIntervals()
+        setBindingStatus('error')
+        setBindingMessage('連線錯誤，請重新嘗試')
+      }
+    }, 2000)
+  }
+
+  // 取消綁定
+  const handleCancelBinding = () => {
+    clearBindingIntervals()
+    setBindingStatus('idle')
+    setIsBindingDialogOpen(false)
+    setAddFormData({ userId: '', rfidUid: '', nickname: '' })
+  }
+
+  // Dialog 關閉處理
+  const handleBindingDialogClose = (open: boolean) => {
+    if (!open) {
+      if (bindingStatus === 'binding' && !confirm('綁定進行中，確定要取消嗎？')) return
+      clearBindingIntervals()
+      setIsBindingDialogOpen(false)
+      setBindingStatus('idle')
+      setBindingStep(0)
+      setBindingCountdown(90)
+      setBindingMessage('')
+      setAddFormData({ userId: '', rfidUid: '', nickname: '' })
+    }
+  }
+
   const handleStartBinding = async () => {
     if (!addFormData.userId) {
       alert('請選擇使用者')
@@ -297,12 +389,24 @@ export const CardsPage: React.FC = () => {
     try {
       setAddSaving(true)
       await userService.startCardBinding(addFormData.userId)
+
+      // 取得 student_id
+      const user = users.find(u => u.id === addFormData.userId)
+      if (!user) throw new Error('找不到使用者資料')
+
+      // 開啟 Dialog（不跳轉）
       setIsAddFormOpen(false)
-      // 導向到綁定頁面
-      navigate(`/dashboard/register?user=${addFormData.userId}`)
+      setIsBindingDialogOpen(true)
+      setBindingStatus('binding')
+      setBindingStep(0)
+      setBindingCountdown(90)
+      setBindingMessage('請在 90 秒內刷卡兩次...')
+
+      // 啟動輪詢
+      startBindingPolling(user.student_id)
     } catch (err: any) {
-      console.error('Failed to start card binding:', err)
       alert(err.response?.data?.detail || '啟動綁定模式失敗')
+    } finally {
       setAddSaving(false)
     }
   }
@@ -818,6 +922,83 @@ export const CardsPage: React.FC = () => {
           </div>
         </CardContent>
       </UICard>
+
+      {/* 綁定模式 Dialog */}
+      <Dialog open={isBindingDialogOpen} onOpenChange={handleBindingDialogClose}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {bindingStatus === 'success' ? '綁定完成' :
+               bindingStatus === 'timeout' ? '綁定逾時' :
+               bindingStatus === 'error' ? '綁定失敗' : '卡片綁定'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <DialogBody>
+            <div className="flex flex-col items-center space-y-6 py-4">
+              {/* 步驟指示器 */}
+              {bindingStatus === 'binding' && (
+                <div className="w-full max-w-xs">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col items-center flex-1">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                        bindingStep >= 1 ? 'bg-green-500 text-white' :
+                        bindingStep === 0 ? 'bg-blue-500 text-white animate-pulse' : 'bg-gray-200 text-gray-400'
+                      }`}>
+                        {bindingStep >= 1 ? <CheckCircle className="w-6 h-6" /> : <CreditCard className="w-6 h-6" />}
+                      </div>
+                      <span className="text-xs mt-2">第一次刷卡</span>
+                    </div>
+                    <div className={`h-1 flex-1 mx-2 ${bindingStep >= 1 ? 'bg-green-500' : 'bg-gray-200'}`} />
+                    <div className="flex flex-col items-center flex-1">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                        bindingStep >= 2 ? 'bg-green-500 text-white' :
+                        bindingStep === 1 ? 'bg-blue-500 text-white animate-pulse' : 'bg-gray-200 text-gray-400'
+                      }`}>
+                        {bindingStep >= 2 ? <CheckCircle className="w-6 h-6" /> : <CreditCard className="w-6 h-6" />}
+                      </div>
+                      <span className="text-xs mt-2">第二次刷卡</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 成功圖示 */}
+              {bindingStatus === 'success' && (
+                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                  <CheckCircle className="w-10 h-10 text-green-600" />
+                </div>
+              )}
+
+              {/* 狀態訊息 */}
+              <div className={`text-center text-lg font-medium ${
+                bindingStatus === 'success' ? 'text-green-700' :
+                bindingStatus === 'error' || bindingStatus === 'timeout' ? 'text-red-600' :
+                bindingStep === 1 ? 'text-blue-600' : 'text-text-secondary'
+              }`}>
+                {bindingMessage}
+              </div>
+
+              {/* 倒數計時 */}
+              {bindingStatus === 'binding' && bindingCountdown > 0 && (
+                <div className="text-sm text-text-secondary">
+                  剩餘時間：{Math.floor(bindingCountdown / 60)} 分 {bindingCountdown % 60} 秒
+                </div>
+              )}
+            </div>
+          </DialogBody>
+
+          <DialogFooter>
+            {bindingStatus === 'binding' ? (
+              <Button variant="secondary" onClick={handleCancelBinding}>取消綁定</Button>
+            ) : (
+              <Button onClick={() => handleBindingDialogClose(false)}>
+                {bindingStatus === 'success' ? '完成' : '關閉'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
