@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card as UICard, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,7 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { EditPanel } from '@/components/ui/edit-panel'
 import { BulkActionBar } from '@/components/ui/bulk-action-bar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
-import { Search, Plus, X, ChevronRight, CreditCard, QrCode, CheckCircle, Check } from 'lucide-react'
+import { Search, Plus, X, ChevronRight, CreditCard, QrCode, CheckCircle } from 'lucide-react'
+import { Meter, MeterIndicator, MeterLabel, MeterTrack, MeterValue } from '@/components/ui/meter'
 import { userService } from '@/services/userService'
 import { registerService } from '@/services/registerService'
 import type { Card, User } from '@/types'
@@ -945,45 +945,17 @@ export const CardsPage: React.FC = () => {
 
           <DialogBody>
             <div className="flex flex-col items-center space-y-8 py-6">
-              {/* 步驟指示器 */}
+              {/* 刷卡進度條 */}
               {bindingStatus === 'binding' && (
-                <div className="flex items-center w-full max-w-xs">
-                  {/* 步驟 1 */}
-                  <div className="flex flex-col items-center flex-1">
-                    <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center text-base font-medium border-2 transition-all mb-2",
-                      bindingStep >= 1
-                        ? "bg-success text-white border-success"
-                        : bindingStep === 0
-                          ? "bg-accent text-white border-accent"
-                          : "bg-white text-text-secondary border-border"
-                    )}>
-                      {bindingStep >= 1 ? <Check className="w-5 h-5" /> : "1"}
-                    </div>
-                    <span className="text-sm text-text-secondary">刷卡 1</span>
+                <Meter max={2} value={bindingStep} className="w-full max-w-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <MeterLabel>刷卡次數</MeterLabel>
+                    <MeterValue>{(_formatted, value) => `${value} / 2`}</MeterValue>
                   </div>
-
-                  {/* 連接線 */}
-                  <div className={cn(
-                    "flex-1 h-1 rounded-full mx-4 mb-7",
-                    bindingStep >= 1 ? "bg-success" : "bg-border"
-                  )} />
-
-                  {/* 步驟 2 */}
-                  <div className="flex flex-col items-center flex-1">
-                    <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center text-base font-medium border-2 transition-all mb-2",
-                      bindingStep >= 2
-                        ? "bg-success text-white border-success"
-                        : bindingStep === 1
-                          ? "bg-accent text-white border-accent"
-                          : "bg-white text-text-secondary border-border"
-                    )}>
-                      {bindingStep >= 2 ? <Check className="w-5 h-5" /> : "2"}
-                    </div>
-                    <span className="text-sm text-text-secondary">刷卡 2</span>
-                  </div>
-                </div>
+                  <MeterTrack>
+                    <MeterIndicator />
+                  </MeterTrack>
+                </Meter>
               )}
 
               {/* 狀態訊息 */}
