@@ -308,10 +308,11 @@ async def switch_to_register_mode(student_id: str, db: Session = Depends(get_db)
     log.info(f"🔄 Switched to REGISTER mode for {student_id} (initial cards: {initial_card_count})")
     return {"status": "ok", "message": "請刷卡"}
 
-# Serve React SPA for all /admin/* routes (catch-all for React Router)
+# Serve React SPA for all /admin/* and /dashboard/* routes (catch-all for React Router)
 @app.get("/admin/{full_path:path}")
+@app.get("/dashboard/{full_path:path}")
 async def serve_spa(full_path: str):
-    """Serve React SPA for all admin routes (支援 React Router)"""
+    """Serve React SPA for all admin/dashboard routes (支援 React Router)"""
     if os.path.exists("frontend/dist/index.html"):
         return FileResponse("frontend/dist/index.html")
     # Fallback: 如果沒有前端構建，返回 404
