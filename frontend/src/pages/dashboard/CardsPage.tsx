@@ -388,11 +388,13 @@ export const CardsPage: React.FC = () => {
 
     try {
       setAddSaving(true)
-      await userService.startCardBinding(addFormData.userId)
 
       // 取得 student_id
       const user = users.find(u => u.id === addFormData.userId)
       if (!user) throw new Error('找不到使用者資料')
+
+      // 使用新的綁定方法，支援卡片別名
+      await userService.startCardBindingWithNickname(user.student_id, addFormData.nickname || undefined)
 
       // 開啟 Dialog（不跳轉）
       setIsAddFormOpen(false)

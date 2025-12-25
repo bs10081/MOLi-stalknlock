@@ -171,6 +171,9 @@ async def handle_register_mode(card_uid: str):
 
                 if existing_card:
                     log.info(f"ℹ️ Card already exists, updating...")
+                    # 如果 session 有新的 nickname，則更新
+                    if session.nickname is not None:
+                        existing_card.nickname = session.nickname
                 else:
                     # 創建新卡片
                     from app.database import generate_uuid
@@ -178,7 +181,7 @@ async def handle_register_mode(card_uid: str):
                         id=generate_uuid(),
                         rfid_uid=card_uid,
                         user_id=user.id,
-                        nickname=None  # 可以之後通過 API 更新
+                        nickname=session.nickname  # 使用 session 中的卡片別名
                     )
                     db.add(new_card)
 
@@ -268,8 +271,8 @@ app.include_router(api.router)
 
 # Endpoint to switch to registration mode (called by web frontend)
 @app.post("/mode/register")
-async def switch_to_register_mode(student_id: str, db: Session = Depends(get_db)):
-    """Switch system to registration mode for a specific student"""
+async def switch_to_register_mode(student_id: str, nickname: str = None, db: Session = Depends(get_db)):
+    """Switch system to registration mode for a specific student (支援卡片別名)"""
     # 查詢或創建使用者
     user = db.query(User).filter(User.student_id == student_id).first()
     if not user:
@@ -291,6 +294,7 @@ async def switch_to_register_mode(student_id: str, db: Session = Depends(get_db)
         session.expires_at = datetime.utcnow() + timedelta(seconds=90)
         session.initial_card_count = initial_card_count
         session.completed = False  # 重置為未完成
+        session.nickname = nickname  # 設置卡片別名
     else:
         # 創建新 session
         session = RegistrationSession(
@@ -299,13 +303,14 @@ async def switch_to_register_mode(student_id: str, db: Session = Depends(get_db)
             step=0,
             expires_at=datetime.utcnow() + timedelta(seconds=90),
             initial_card_count=initial_card_count,
-            completed=False
+            completed=False,
+            nickname=nickname  # 設置卡片別名
         )
         db.add(session)
 
     db.commit()
 
-    log.info(f"🔄 Switched to REGISTER mode for {student_id} (initial cards: {initial_card_count})")
+    log.info(f"🔄 Switched to REGISTER mode for {student_id} (initial cards: {initial_card_count}, nickname: {nickname})")
     return {"status": "ok", "message": "請刷卡"}
 
 # Serve React SPA for all /admin/* and /dashboard/* routes (catch-all for React Router)

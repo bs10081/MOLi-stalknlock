@@ -113,4 +113,16 @@ export const userService = {
       },
     })
   },
+
+  // 新增：啟動卡片綁定模式（使用 /mode/register 端點，支援卡片別名）
+  startCardBindingWithNickname: async (studentId: string, nickname?: string) => {
+    const params = new URLSearchParams()
+    params.append('student_id', studentId)
+    if (nickname) params.append('nickname', nickname)
+    return api.post('/mode/register', params, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    })
+  },
 }

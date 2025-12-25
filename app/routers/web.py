@@ -93,30 +93,45 @@ async def register_post(
     background_tasks: BackgroundTasks,
     student_id: str = Form(...),
     name: str = Form(...),
+    email: Optional[str] = Form(None),
+    telegram_id: Optional[str] = Form(None),
+    nickname: Optional[str] = Form(None),
     admin_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db)
 ):
-    """Handle registration form submission (支援副卡綁定)"""
+    """Handle registration form submission (支援副卡綁定、email、telegram_id、卡片別名)"""
     # 驗證管理員身份
     current_admin = get_current_admin(admin_token)
     if not current_admin:
         raise HTTPException(status_code=401, detail="請先登入")
-    
+
     student_id = student_id.strip()
     name = name.strip()
-    
+    if email:
+        email = email.strip() or None
+    if telegram_id:
+        telegram_id = telegram_id.strip() or None
+    if nickname:
+        nickname = nickname.strip() or None
+
     # Check if student_id already exists
     existing = db.query(User).filter(User.student_id == student_id).first()
-    
+
     if existing:
-        # 更新姓名（如果有改變）
+        # 更新用戶資訊（如果有改變）
         if existing.name != name:
             existing.name = name
-            db.commit()
             log.info(f"📝 Updated name for {student_id}: {name}")
-        
+        if email is not None and existing.email != email:
+            existing.email = email
+            log.info(f"📧 Updated email for {student_id}: {email}")
+        if telegram_id is not None and existing.telegram_id != telegram_id:
+            existing.telegram_id = telegram_id
+            log.info(f"📱 Updated telegram_id for {student_id}: {telegram_id}")
+        db.commit()
+
         user = existing
-        
+
         # 檢查現有卡片數量（僅用於顯示資訊）
         card_count = db.query(Card).filter(Card.user_id == existing.id).count()
         log.info(f"📋 User {student_id} ({name}) currently has {card_count} card(s), adding new card...")
@@ -126,7 +141,9 @@ async def register_post(
         user = User(
             id=generate_uuid(),
             student_id=student_id,
-            name=name
+            name=name,
+            email=email,
+            telegram_id=telegram_id
         )
         db.add(user)
         db.commit()
@@ -154,6 +171,7 @@ async def register_post(
         session.expires_at = datetime.utcnow() + timedelta(seconds=90)
         session.initial_card_count = initial_card_count
         session.completed = False
+        session.nickname = nickname  # 新增：記錄卡片別名
     else:
         session = RegistrationSession(
             user_id=user.id,
@@ -161,7 +179,8 @@ async def register_post(
             step=0,
             expires_at=datetime.utcnow() + timedelta(seconds=90),
             initial_card_count=initial_card_count,
-            completed=False
+            completed=False,
+            nickname=nickname  # 新增：記錄卡片別名
         )
         db.add(session)
 

@@ -58,6 +58,7 @@ class RegistrationSession(Base):
     expires_at = Column(TIMESTAMP(timezone=True), nullable=True)
     initial_card_count = Column(Integer, default=0)  # 記錄開始綁定時的卡片數量
     completed = Column(Boolean, default=False, nullable=False)  # 標記綁定是否完成
+    nickname = Column(String(50), nullable=True)  # 卡片別名（用於綁定時設置）
 
     # Relationship
     user = relationship("User")
