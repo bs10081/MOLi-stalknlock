@@ -987,12 +987,12 @@ export const CardsPage: React.FC = () => {
 
               {/* 倒數計時 */}
               {bindingStatus === 'binding' && bindingCountdown > 0 && (
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
                   <Spinner size="sm" />
-                  <div className="text-3xl font-mono font-bold text-text-primary tracking-wider">
+                  <span className="text-lg font-mono font-medium text-text-secondary">
                     {String(Math.floor(bindingCountdown / 60)).padStart(2, '0')}:
                     {String(bindingCountdown % 60).padStart(2, '0')}
-                  </div>
+                  </span>
                 </div>
               )}
             </div>
