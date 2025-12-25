@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card as UICard, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { EditPanel } from '@/components/ui/edit-panel'
 import { BulkActionBar } from '@/components/ui/bulk-action-bar'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
-import { Search, Plus, X, ChevronRight, CreditCard, QrCode, CheckCircle } from 'lucide-react'
+import { Search, Plus, X, ChevronRight, CreditCard, QrCode, CheckCircle, Check } from 'lucide-react'
 import { userService } from '@/services/userService'
 import { registerService } from '@/services/registerService'
 import type { Card, User } from '@/types'
@@ -943,54 +944,79 @@ export const CardsPage: React.FC = () => {
           </DialogHeader>
 
           <DialogBody>
-            <div className="flex flex-col items-center space-y-6 py-4">
+            <div className="flex flex-col items-center space-y-8 py-6">
               {/* 步驟指示器 */}
               {bindingStatus === 'binding' && (
-                <div className="w-full max-w-xs">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex flex-col items-center flex-1">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                        bindingStep >= 1 ? 'bg-green-500 text-white' :
-                        bindingStep === 0 ? 'bg-blue-500 text-white animate-pulse' : 'bg-gray-200 text-gray-400'
-                      }`}>
-                        {bindingStep >= 1 ? <CheckCircle className="w-6 h-6" /> : <CreditCard className="w-6 h-6" />}
-                      </div>
-                      <span className="text-xs mt-2">第一次刷卡</span>
+                <div className="flex items-center w-full max-w-[200px]">
+                  {/* 步驟 1 */}
+                  <div className="flex flex-col items-center">
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-all",
+                      bindingStep >= 1
+                        ? "bg-success text-white border-success"
+                        : bindingStep === 0
+                          ? "bg-accent text-white border-accent"
+                          : "bg-white text-text-secondary border-border"
+                    )}>
+                      {bindingStep >= 1 ? <Check className="w-4 h-4" /> : "1"}
                     </div>
-                    <div className={`h-1 flex-1 mx-2 ${bindingStep >= 1 ? 'bg-green-500' : 'bg-gray-200'}`} />
-                    <div className="flex flex-col items-center flex-1">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                        bindingStep >= 2 ? 'bg-green-500 text-white' :
-                        bindingStep === 1 ? 'bg-blue-500 text-white animate-pulse' : 'bg-gray-200 text-gray-400'
-                      }`}>
-                        {bindingStep >= 2 ? <CheckCircle className="w-6 h-6" /> : <CreditCard className="w-6 h-6" />}
-                      </div>
-                      <span className="text-xs mt-2">第二次刷卡</span>
+                    <span className="text-xs mt-1.5 text-text-secondary">刷卡 1</span>
+                  </div>
+
+                  {/* 連接線 */}
+                  <div className={cn(
+                    "flex-1 h-1 rounded-full mx-3 -mt-5",
+                    bindingStep >= 1 ? "bg-success" : "bg-border"
+                  )} />
+
+                  {/* 步驟 2 */}
+                  <div className="flex flex-col items-center">
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-all",
+                      bindingStep >= 2
+                        ? "bg-success text-white border-success"
+                        : bindingStep === 1
+                          ? "bg-accent text-white border-accent"
+                          : "bg-white text-text-secondary border-border"
+                    )}>
+                      {bindingStep >= 2 ? <Check className="w-4 h-4" /> : "2"}
                     </div>
+                    <span className="text-xs mt-1.5 text-text-secondary">刷卡 2</span>
                   </div>
                 </div>
               )}
 
-              {/* 成功圖示 */}
+              {/* 狀態訊息 */}
+              {bindingStatus === 'binding' && (
+                <p className="text-sm text-text-secondary">
+                  請將卡片靠近讀卡機
+                </p>
+              )}
+
               {bindingStatus === 'success' && (
-                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-                  <CheckCircle className="w-10 h-10 text-green-600" />
+                <div className="flex items-center gap-2 text-success">
+                  <CheckCircle className="w-5 h-5" />
+                  <span className="font-medium">綁定成功</span>
                 </div>
               )}
 
-              {/* 狀態訊息 */}
-              <div className={`text-center text-lg font-medium ${
-                bindingStatus === 'success' ? 'text-green-700' :
-                bindingStatus === 'error' || bindingStatus === 'timeout' ? 'text-red-600' :
-                bindingStep === 1 ? 'text-blue-600' : 'text-text-secondary'
-              }`}>
-                {bindingMessage}
-              </div>
+              {bindingStatus === 'timeout' && (
+                <div className="w-full p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
+                  <p className="text-yellow-800 text-sm">綁定超時，請重試</p>
+                </div>
+              )}
+
+              {bindingStatus === 'error' && (
+                <div className="w-full p-3 bg-red-50 border border-red-200 rounded-lg text-center">
+                  <p className="text-red-800 text-sm">{bindingMessage}</p>
+                </div>
+              )}
 
               {/* 倒數計時 */}
               {bindingStatus === 'binding' && bindingCountdown > 0 && (
-                <div className="text-sm text-text-secondary">
-                  剩餘時間：{Math.floor(bindingCountdown / 60)} 分 {bindingCountdown % 60} 秒
+                <div className="text-3xl font-mono font-bold text-text-primary tracking-wider">
+                  {String(Math.floor(bindingCountdown / 60)).padStart(2, '0')}:
+                  {String(bindingCountdown % 60).padStart(2, '0')}
                 </div>
               )}
             </div>
