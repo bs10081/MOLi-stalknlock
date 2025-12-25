@@ -41,7 +41,7 @@ class Card(Base):
 
 class AccessLog(Base):
     __tablename__ = "access_logs"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     card_id = Column(String(36), ForeignKey("cards.id"), nullable=True)  # 記錄使用哪張卡
@@ -65,7 +65,7 @@ class RegistrationSession(Base):
 
 class Admin(Base):
     __tablename__ = "admins"
-    
+
     id = Column(String(36), primary_key=True, default=generate_uuid)
     username = Column(String(50), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)

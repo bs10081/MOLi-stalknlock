@@ -215,19 +215,19 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Startup
     log.info("🚀 MOLi Door System starting up...")
-    
+
     # Initialize database
     init_db()
     log.info("✅ Database initialized")
-    
+
     # Start RFID reader in background
     asyncio.create_task(rfid_reader.read_loop(handle_rfid_scan))
     log.info("✅ RFID reader started")
-    
+
     log.info("✅ System ready!")
-    
+
     yield
-    
+
     # Shutdown
     log.info("Shutting down...")
 
