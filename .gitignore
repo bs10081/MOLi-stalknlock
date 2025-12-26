@@ -224,3 +224,26 @@ Thumbs.db
 # IDE swap files
 *.swp
 *.swo
+
+# Node.js / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-store/
+
+# Frontend environment files
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Docker volumes and data
+data/
+*.db-shm
+*.db-wal
