@@ -1,0 +1,108 @@
+name: moli-door
+version: '2.0.0'
+summary: MOLi RFID Door Access Control System
+description: |
+  RFID-based door access control system for MOLi Lab.
+
+  Features:
+  - USB RFID reader support (HID keyboard emulation)
+  - GPIO-controlled door lock via relay
+  - Web-based management interface
+  - Telegram notifications
+  - Multi-card per user support
+  - Access logging and history
+
+base: core24
+confinement: strict
+grade: stable
+
+# 支援樹莓派 3B/4B (arm64)
+platforms:
+  arm64:
+    build-on: [arm64]
+    build-for: [arm64]
+
+apps:
+  moli-door:
+    command: bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    daemon: simple
+    restart-condition: always
+    restart-delay: 5s
+
+    plugs:
+      - network
+      - network-bind
+      - raw-input          # evdev 存取 /dev/input/* (RFID)
+      - gpio-chardev       # GPIO chardev 存取 (門鎖)
+
+    environment:
+      PYTHONPATH: $SNAP/lib/python3.12/site-packages:$SNAP
+      DATABASE_URL: sqlite:///$SNAP_COMMON/moli_door.db
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+      TZ: Asia/Taipei
+
+parts:
+  # 前端建置
+  frontend:
+    plugin: npm
+    source: frontend/
+    npm-node-version: "20"
+    override-build: |
+      npm ci
+      npm run build
+      mkdir -p $CRAFT_PART_INSTALL/frontend/dist
+      cp -r dist/* $CRAFT_PART_INSTALL/frontend/dist/
+
+  # 後端建置
+  backend:
+    plugin: python
+    source: .
+    python-requirements:
+      - requirements-snap.txt
+
+    stage-packages:
+      - libpython3.12-stdlib
+      - libpython3.12-minimal
+      - python3.12-minimal
+      - libgpiod2              # gpiod 函式庫 (for rpi-lgpio)
+      - libgpiod-dev           # gpiod 開發標頭
+
+    override-build: |
+      craftctl default
+
+      # 複製應用程式檔案
+      mkdir -p $CRAFT_PART_INSTALL/app
+      cp -r app/* $CRAFT_PART_INSTALL/app/
+
+      # 複製模板和靜態檔案
+      mkdir -p $CRAFT_PART_INSTALL/templates
+      cp -r templates/* $CRAFT_PART_INSTALL/templates/
+
+      mkdir -p $CRAFT_PART_INSTALL/static
+      cp -r static/* $CRAFT_PART_INSTALL/static/
+
+      # 建立資料目錄佔位符
+      mkdir -p $CRAFT_PART_INSTALL/data
+
+    after:
+      - frontend
+
+# Snap 內部路徑對映
+layout:
+  /app/frontend/dist:
+    symlink: $SNAP/frontend/dist
+  /app/templates:
+    symlink: $SNAP/templates
+  /app/static:
+    symlink: $SNAP/static
+  /app/data:
+    bind: $SNAP_COMMON
+
+# Interface 定義
+plugs:
+  raw-input:
+    interface: raw-input
+
+  gpio-chardev:
+    interface: gpio-chardev
