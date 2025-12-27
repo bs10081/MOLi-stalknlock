@@ -45,12 +45,23 @@ apps:
 parts:
   # 前端建置
   frontend:
-    plugin: npm
+    plugin: dump
     source: frontend/
-    npm-node-version: "20"
+    build-snaps:
+      - node/20/stable
+    build-packages:
+      - npm
     override-build: |
-      npm ci
+      # 設置 PATH 確保能找到 node_modules/.bin
+      export PATH="$PWD/node_modules/.bin:$PATH"
+
+      # 安裝依賴
+      npm install
+
+      # 建置前端
       npm run build
+
+      # 複製結果
       mkdir -p $CRAFT_PART_INSTALL/frontend/dist
       cp -r dist/* $CRAFT_PART_INSTALL/frontend/dist/
 
@@ -88,16 +99,7 @@ parts:
     after:
       - frontend
 
-# Snap 內部路徑對映
-layout:
-  /app/frontend/dist:
-    symlink: $SNAP/frontend/dist
-  /app/templates:
-    symlink: $SNAP/templates
-  /app/static:
-    symlink: $SNAP/static
-  /app/data:
-    bind: $SNAP_COMMON
+# 移除 layout，改用環境變數和工作目錄
 
 # Interface 定義
 plugs:
