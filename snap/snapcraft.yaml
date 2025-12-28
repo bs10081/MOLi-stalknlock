@@ -17,9 +17,10 @@ confinement: strict
 grade: stable
 
 # 支援樹莓派 3B/4B (arm64)
+# 支援 amd64 交叉編譯到 arm64
 platforms:
   arm64:
-    build-on: [arm64]
+    build-on: [amd64, arm64]
     build-for: [arm64]
 
 apps:
