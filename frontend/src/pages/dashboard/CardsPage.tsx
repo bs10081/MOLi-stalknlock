@@ -14,7 +14,7 @@ import { Search, Plus, X, ChevronRight, CreditCard, QrCode, CheckCircle } from '
 import { Meter, MeterIndicator, MeterLabel, MeterTrack, MeterValue } from '@/components/ui/meter'
 import { Spinner } from '@/components/ui/spinner'
 import { userService } from '@/services/userService'
-import { registerService } from '@/services/registerService'
+import { cardBindingService } from '@/services/cardBindingService'
 import type { Card, User } from '@/types'
 
 interface CardWithUser extends Card {
@@ -339,7 +339,7 @@ export const CardsPage: React.FC = () => {
     // 輪詢狀態
     pollIntervalRef.current = window.setInterval(async () => {
       try {
-        const status = await registerService.checkStatus(studentId)
+        const status = await cardBindingService.checkStatus(studentId)
         if (status.step !== undefined) setBindingStep(status.step)
         if (status.status_message) setBindingMessage(status.status_message)
 

@@ -67,15 +67,47 @@ ssh moli-door "cd /home/pi/Host/MOLi-stalknlock && docker compose build && docke
 
 ## 環境變數
 
-必要變數（參考 `.env.production` 或 `.env.development`）：
-- `DEV_MODE`: 開發模式（禁用實際 RFID）
-- `DATABASE_URL`: SQLite 資料庫路徑
-- `BOT_TOKEN` / `TG_CHAT_ID`: Telegram 通知
-- `RFID_DEVICE_PATH`: USB RFID 設備路徑（如 `/dev/input/event0`）
-- `LOCK_PIN`: GPIO 門鎖控制腳位
-- `LOCK_ACTIVE_LEVEL`: 門鎖觸發電平（HIGH/LOW）
-- `LOCK_DURATION`: 開門持續秒數
-- `REGISTER_TIMEOUT`: 卡片綁定超時秒數
+**必須設置的變數**（參考 `.env.example`）：
+
+### 安全性配置（必需）
+- `JWT_SECRET_KEY`: JWT 簽章密鑰（**必須設置！**建議 32+ 字元）
+  ```bash
+  # 生成方式
+  python -c 'import secrets; print(secrets.token_urlsafe(32))'
+  ```
+- `JWT_ALGORITHM`: JWT 演算法（預設 HS256）
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: Token 有效期（預設 480 分鐘 = 8 小時）
+- `RATE_LIMIT_ENABLED`: 是否啟用登入速率限制（預設 true）
+- `RATE_LIMIT_PER_MINUTE`: 每分鐘最大登入嘗試次數（預設 5）
+
+### 系統配置
+- `DEV_MODE`: 開發模式（禁用實際 RFID 和 GPIO）
+- `DATABASE_URL`: SQLite 資料庫路徑（預設 `sqlite:///./data/moli_door.db`）
+- `BOT_TOKEN` / `TG_CHAT_ID`: Telegram 通知設定
+- `RFID_DEVICE_PATH`: USB RFID 設備路徑（如 `/dev/input/by-id/usb-Sycreader...`）
+- `LOCK_PIN`: GPIO 門鎖控制腳位（預設 16）
+- `LOCK_ACTIVE_LEVEL`: 門鎖觸發電平（1=HIGH, 0=LOW）
+- `LOCK_DURATION`: 開門持續秒數（預設 3）
+- `REGISTER_TIMEOUT`: 卡片綁定超時秒數（預設 90）
+
+## 安全性功能
+
+本系統已實作以下安全性機制：
+
+- ✅ **JWT 環境變數化**：SECRET_KEY 從環境變數讀取，啟動時強制驗證
+- ✅ **登入速率限制**：防止暴力破解（5 次/分鐘）
+- ✅ **Cookie 安全屬性**：`httponly=True`, `secure=True`, `samesite=strict`
+- ✅ **Docker 最小權限**：使用 `cap_add: SYS_RAWIO` 取代 `privileged`
+- ✅ **管理員專屬綁定**：公開註冊路由已移除，所有操作需管理員權限
+
+## 部署檢查清單
+
+部署前請確認：
+- [ ] 已設置唯一的 `JWT_SECRET_KEY`（≥32 字元）
+- [ ] `.env` 檔案已配置完整（參考 `.env.example`）
+- [ ] Docker 容器使用 `cap_add` 而非 `privileged`
+- [ ] 速率限制已測試（5 次失敗登入後鎖定 1 分鐘）
+- [ ] HTTPS 已啟用（Cookie secure 屬性生效）
 
 ## RFID 刷卡流程
 
@@ -85,6 +117,29 @@ ssh moli-door "cd /home/pi/Host/MOLi-stalknlock && docker compose build && docke
    - **無** → 正常模式（查詢卡片、檢查使用者/卡片啟用狀態、開門）
 3. 發送 Telegram 通知
 4. 記錄至 `access_logs`
+
+## 卡片綁定流程（僅管理員）
+
+**重要**：公開註冊路由已移除，所有綁定操作需透過管理介面執行。
+
+### 方式一：新增使用者並綁定卡片（UsersPage）
+1. 登入管理介面 → 使用者管理
+2. 點擊「新增用戶並綁定卡片」
+3. 填寫學號、姓名、Email、Telegram ID、卡片別名
+4. 點擊「開始綁定」→ 90 秒內刷卡兩次
+5. 系統輪詢綁定狀態，顯示步驟進度（Step 1/2 → Step 2/2）
+
+### 方式二：為現有使用者綁定新卡片（CardsPage）
+1. 登入管理介面 → 卡片管理
+2. 點擊「新增卡片」→ 選擇使用者 → 填寫卡片別名
+3. 點擊「使用綁定模式」→ 90 秒內刷卡兩次
+4. 系統輪詢綁定狀態，顯示倒數計時和步驟進度
+
+### 後端 API 端點（需管理員 Cookie）
+- `POST /register`: 啟動綁定 session（需 `admin_token` Cookie）
+- `GET /check_status/{student_id}`: 輪詢綁定狀態（需 `admin_token` Cookie）
+
+**注意**：這兩個端點已強制驗證管理員身份，未登入會返回 401 錯誤。
 
 ## 專案結構
 
@@ -96,7 +151,7 @@ ssh moli-door "cd /home/pi/Host/MOLi-stalknlock && docker compose build && docke
   - `services/` - 核心服務（rfid_reader, gpio_control, telegram, auth）
 - `frontend/` - React + TypeScript 前端
   - `src/pages/` - 頁面元件
-  - `src/services/` - API 服務層
+  - `src/services/` - API 服務層（`cardBindingService.ts` 處理綁定功能）
   - `src/components/` - UI 元件
-- `templates/` - Jinja2 模板（舊版註冊頁面）
+- `templates/` - Jinja2 模板（僅保留 login.html 作為備用）
 - `static/` - CSS 靜態資源

@@ -18,15 +18,13 @@ python-dotenv==1.0.0
 # Input device handling (RFID reader)
 evdev==1.6.1
 
-# GPIO control for Raspberry Pi
-RPi.GPIO==0.7.1
+# GPIO control for Raspberry Pi (Ubuntu Core compatible)
+# rpi-lgpio provides RPi.GPIO compatible API using /dev/gpiochip*
+rpi-lgpio==0.6
 
 # Authentication
 bcrypt==4.1.2
 python-jose[cryptography]==3.3.0
-
-# Rate limiting
-slowapi==0.1.9
 
 # Timezone
 pytz==2024.1

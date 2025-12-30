@@ -6,31 +6,27 @@ services:
     image: bs10081/moli-door:dev
     container_name: moli-door-system
     restart: unless-stopped
-    
-    # Privileged mode for GPIO and device access
-    privileged: true
-    
+
+    # 使用精確的 capabilities 取代 privileged
+    cap_add:
+      - SYS_RAWIO  # GPIO 存取
+
     # Device mappings
     devices:
       - /dev/gpiomem:/dev/gpiomem  # GPIO access
       - /dev/input:/dev/input      # RFID reader access
-    
-    # Port mapping (FastAPI port 8000)
-    ports:
-      - "8000:8000"
-    
+
+    # Network mode: host（不需要 ports 映射）
+    network_mode: host
+
     # Volume for persistent database
     volumes:
       - ./data:/app/data
-      - /dev:/dev  # Full device access
-    
+
     # Use .env file for environment variables
     env_file:
       - .env
-    
-    # Network mode: host for better device access
-    network_mode: host
-    
+
     # Logging
     logging:
       driver: "json-file"

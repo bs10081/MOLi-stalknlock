@@ -55,12 +55,6 @@ export const HomePage: React.FC = () => {
                 管理員登入
                 <ChevronRight className="w-4 h-4" />
               </Button>
-              <Button
-                variant="secondary"
-                disabled
-              >
-                註冊新卡片
-              </Button>
             </div>
           </CardContent>
         </Card>

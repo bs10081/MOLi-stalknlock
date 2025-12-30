@@ -8,6 +8,24 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // 強制解析 axios 的 ESM 路徑
+      'axios': 'axios/dist/axios.js',
+    },
+  },
+  optimizeDeps: {
+    include: ['axios'],
+    esbuildOptions: {
+      // 確保 axios 被正確處理為 ESM
+      mainFields: ['module', 'main'],
+    },
+  },
+  build: {
+    commonjsOptions: {
+      include: [/axios/, /node_modules/],
+    },
+    rollupOptions: {
+      // 確保 axios 在建置時使用正確的解析邏輯
+      external: [],
     },
   },
   server: {
