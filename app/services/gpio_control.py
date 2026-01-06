@@ -186,3 +186,39 @@ class DaytimeModeManager:
 
 # 全域實例
 daytime_manager = DaytimeModeManager()
+
+
+class LockModeManager:
+    """手動鎖門模式管理器"""
+
+    def __init__(self):
+        self._always_lock = False  # False = Stay Unlocked, True = Always Lock
+        self._lock = Lock()
+
+    @property
+    def always_lock(self) -> bool:
+        """取得當前模式狀態"""
+        with self._lock:
+            return self._always_lock
+
+    def toggle(self) -> bool:
+        """切換模式並回傳新狀態"""
+        with self._lock:
+            self._always_lock = not self._always_lock
+            return self._always_lock
+
+    def set_mode(self, always_lock: bool):
+        """直接設定模式"""
+        with self._lock:
+            self._always_lock = always_lock
+
+    def get_status(self) -> dict:
+        """取得當前狀態（供 API 查詢）"""
+        return {
+            "always_lock": self.always_lock,
+            "mode_name": "隨時上鎖" if self.always_lock else "不上鎖"
+        }
+
+
+# 全域實例
+lock_mode_manager = LockModeManager()

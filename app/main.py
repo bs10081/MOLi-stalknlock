@@ -15,10 +15,10 @@ from app.database import init_db, get_db, User, Card, RegistrationSession, Acces
 
 from app.services.rfid_reader import rfid_reader
 from app.services.gpio_control import (
-    open_lock, deny_access, unlock_persistent, lock_door, daytime_manager
+    open_lock, deny_access, unlock_persistent, lock_door, daytime_manager, lock_mode_manager
 )
 from app.services.telegram import send_telegram
-from app.config import DAYTIME_END_HOUR, DAYTIME_MODE_ENABLED, TIMEZONE
+from app.config import DAYTIME_END_HOUR, DAYTIME_MODE_ENABLED, TIMEZONE, VERSION, VERSION_CODENAME
 
 # Logging setup
 logging.basicConfig(
@@ -47,8 +47,15 @@ async def handle_rfid_scan(card_uid: str):
                 # 進入註冊模式
                 await handle_register_mode(card_uid)
             else:
-                # 進入正常模式
-                await handle_normal_mode(card_uid)
+                # 查詢卡片資料
+                card = db.query(Card).filter(Card.rfid_uid == card_uid).first()
+
+                # 檢查是否為管理卡
+                if card and card.card_type == "admin":
+                    await handle_admin_card(card_uid, card)
+                else:
+                    # 進入正常模式
+                    await handle_normal_mode(card_uid)
         finally:
             db.close()
 
@@ -80,8 +87,18 @@ async def handle_normal_mode(card_uid: str):
             card_info = f" ({card.nickname})" if card.nickname else ""
             log.info(f"✅ Access granted: {user.name} ({user.student_id}){card_info}")
 
-            # === 白天模式判斷 ===
-            if daytime_manager.should_use_daytime_mode():
+            # === 門鎖控制邏輯（優先順序：手動模式 > 白天模式 > 預設）===
+            if lock_mode_manager.always_lock:
+                # 手動鎖門模式：隨時上鎖（開門後自動鎖回）
+                open_lock()
+                log.info(f"🔒 Manual lock mode: Door locked after access")
+
+                # Telegram 通知
+                message = f"✅ {user.name} ({user.student_id}) 解鎖門禁{card_info}\n[隨時上鎖模式]"
+                asyncio.create_task(asyncio.to_thread(send_telegram, message))
+
+            elif daytime_manager.should_use_daytime_mode():
+                # 白天模式邏輯
                 if not daytime_manager.is_daytime_unlocked:
                     # 第一次解鎖：持續解鎖
                     unlock_persistent()
@@ -98,7 +115,7 @@ async def handle_normal_mode(card_uid: str):
                     # 已經解鎖：只記錄，不操作門鎖
                     log.info(f"🌞 Daytime mode: Door already unlocked, logging only")
             else:
-                # 正常模式：開門後自動鎖回
+                # 預設模式：開門後自動鎖回
                 open_lock()
 
                 # Telegram 通知
@@ -124,6 +141,39 @@ async def handle_normal_mode(card_uid: str):
             deny_access()
     finally:
         db.close()
+
+async def handle_admin_card(card_uid: str, card: Card):
+    """處理管理卡刷卡 - 純粹切換模式，不開門"""
+    log.info(f"🔑 [Admin Card] Toggling lock mode")
+
+    # 切換鎖門模式
+    new_mode = lock_mode_manager.toggle()
+
+    card_info = f" ({card.nickname})" if card.nickname else ""
+    user_info = f"{card.user.name} ({card.user.student_id})" if card.user else "共用管理卡"
+
+    if new_mode:  # 切換到「隨時上鎖」模式
+        log.info(f"🔒 Switched to ALWAYS LOCK mode by {user_info}")
+        lock_door()
+
+        # 重置白天模式狀態
+        if daytime_manager.is_daytime_unlocked:
+            daytime_manager.set_daytime_unlocked(False)
+
+        # Telegram 通知
+        asyncio.create_task(asyncio.to_thread(
+            send_telegram,
+            f"🔒 [手動鎖門模式] 已切換為「隨時上鎖」\\n操作者：{user_info}{card_info}"
+        ))
+    else:  # 切換到「不上鎖」模式
+        log.info(f"🔓 Switched to STAY UNLOCKED mode by {user_info}")
+        unlock_persistent()
+
+        # Telegram 通知
+        asyncio.create_task(asyncio.to_thread(
+            send_telegram,
+            f"🔓 [手動鎖門模式] 已切換為「不上鎖」\\n操作者：{user_info}{card_info}\\n門將保持解鎖狀態"
+        ))
 
 async def handle_register_mode(card_uid: str):
     """Handle card scan in registration mode (支援一人多卡)"""
@@ -323,8 +373,8 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="MOLi Door System",
-    description="FastAPI-based door access control system with web UI",
-    version="2.0.0",
+    description=f"FastAPI-based door access control system with web UI",
+    version=VERSION,
     lifespan=lifespan
 )
 

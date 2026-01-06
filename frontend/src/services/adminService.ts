@@ -1,5 +1,5 @@
 import api from './api'
-import type { Admin, AccessLog } from '../types'
+import type { Admin, AccessLog, DoorStatus, LockMode, AdminCard } from '../types'
 
 export interface Stats {
   user_count: number
@@ -55,5 +55,56 @@ export const adminService = {
   getStats: async () => {
     const response = await api.get<Stats>('/admin/stats')
     return response.data
+  },
+
+  // === 門鎖狀態與控制 ===
+
+  getDoorStatus: async () => {
+    const response = await api.get<DoorStatus>('/admin/door/status')
+    return response.data
+  },
+
+  forceLockDoor: async () => {
+    return api.post('/admin/door/lock')
+  },
+
+  // === 鎖門模式 API ===
+
+  getLockMode: async () => {
+    const response = await api.get<LockMode>('/admin/door/lock-mode')
+    return response.data
+  },
+
+  setLockMode: async (always_lock: boolean) => {
+    const formData = new FormData()
+    formData.append('always_lock', always_lock.toString())
+    return api.post('/admin/door/lock-mode', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
+
+  // === 管理卡 API ===
+
+  getAdminCards: async () => {
+    const response = await api.get<AdminCard[]>('/admin/admin-cards')
+    return response.data
+  },
+
+  createAdminCard: async (rfid_uid: string, nickname?: string, user_id?: string) => {
+    const formData = new FormData()
+    formData.append('rfid_uid', rfid_uid)
+    if (nickname) formData.append('nickname', nickname)
+    if (user_id) formData.append('user_id', user_id)
+    return api.post('/admin/admin-cards', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
+
+  deleteAdminCard: async (card_id: string) => {
+    return api.delete(`/admin/admin-cards/${card_id}`)
   },
 }

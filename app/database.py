@@ -31,8 +31,9 @@ class Card(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     rfid_uid = Column(String(50), unique=True, nullable=False, index=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # 改為可空，支援獨立共用卡
     nickname = Column(String(50), nullable=True)  # Optional: 卡片暱稱（例如：學生證、備用卡）
+    card_type = Column(String(20), default="access", nullable=False)  # "access" = 一般門禁卡, "admin" = 管理卡
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 

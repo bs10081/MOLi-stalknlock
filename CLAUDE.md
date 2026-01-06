@@ -94,10 +94,24 @@ FastAPI 的路由分層設計：
 
 ### 資料庫模型 (app/database.py)
 - **users**: 使用者資料 (student_id, name, email, telegram_id, is_active)
-- **cards**: RFID 卡片 (rfid_uid, user_id, nickname, is_active) - 支援一人多卡
+- **cards**: RFID 卡片 (rfid_uid, user_id, nickname, card_type, is_active) - 支援一人多卡與管理卡
 - **access_logs**: 刷卡記錄 (user_id, card_id, action, timestamp, success)
 - **registration_sessions**: 卡片綁定暫存 (step, first_uid, expires_at, completed, nickname)
 - **admins**: 管理員帳號 (username, password_hash, name, sub)
+
+**⚠️ 重要：資料庫 Schema 變更必須執行遷移**
+
+每次修改 SQLAlchemy 模型（新增/刪除/修改欄位或表）時，**必須**建立並執行資料庫遷移腳本，否則會導致生產環境錯誤。
+
+**遷移步驟：**
+1. 修改 `app/database.py` 中的模型
+2. 建立遷移腳本：`scripts/migrate_vX.X.X.py`
+3. 在開發環境測試遷移
+4. 備份生產資料庫
+5. 執行生產遷移：`docker exec moli-door-system python3 /tmp/migrate.py`
+6. 重啟服務並驗證
+
+**詳細指南請參考**：`~/.claude/skills/database-migration.md`
 
 **注意**：資料庫 Schema 需與 SQLAlchemy 模型保持一致
 
@@ -147,6 +161,39 @@ LOCK_DURATION=3                # 開門秒數
 # 註冊超時
 REGISTER_TIMEOUT=90            # 卡片綁定流程超時秒數
 ```
+
+## 版本管理
+
+本專案遵循**語意化版本控制 (Semantic Versioning, SemVer)**。
+
+### 當前版本
+- **版本號**：`2.1.0`
+- **代號**：`Lock Commander`
+- **查詢 API**：`GET /admin/version`
+
+### 版本號格式
+
+```
+MAJOR.MINOR.PATCH
+  │     │     │
+  │     │     └─ PATCH：向下相容的問題修正
+  │     └─────── MINOR：向下相容的功能新增
+  └───────────── MAJOR：不相容的 API 修改
+```
+
+### 版本定義位置
+- **後端**：`app/config.py` - `VERSION` 和 `VERSION_CODENAME`
+- **前端**：`frontend/package.json` - `version`
+- **Docker**：映像標籤應對應版本號
+
+### 版本更新流程
+1. 確認變更類型（MAJOR/MINOR/PATCH）
+2. 更新 `app/config.py` 的 `VERSION`
+3. 更新 `frontend/package.json` 的 `version`
+4. 建置並標記 Docker 映像：`bs10081/moli-door:v2.1.0`
+5. 建立 Git tag：`git tag v2.1.0`
+
+**詳細規範請參考**：`~/.claude/skills/semver.md`
 
 ## 技術注意事項
 

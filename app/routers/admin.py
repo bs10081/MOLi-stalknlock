@@ -9,8 +9,9 @@ from datetime import datetime, timedelta
 
 from app.database import get_db, User, Card, Admin, AccessLog, generate_uuid
 from app.services.telegram import send_telegram
-from app.services.gpio_control import open_lock, lock_door, get_lock_state, daytime_manager
+from app.services.gpio_control import open_lock, lock_door, get_lock_state, daytime_manager, lock_mode_manager
 from app.services.auth import verify_access_token, hash_password
+from app.config import VERSION, VERSION_CODENAME
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -639,12 +640,13 @@ async def update_user(
 
 @router.get("/door/status")
 async def get_door_status(admin_token: Optional[str] = Cookie(None)):
-    """查詢門鎖狀態（包含白天模式）"""
+    """查詢門鎖狀態（包含白天模式與手動鎖門模式）"""
     current_admin = get_current_admin(admin_token)
 
     return {
         "is_locked": not get_lock_state(),
-        "daytime_mode": daytime_manager.get_status()
+        "daytime_mode": daytime_manager.get_status(),
+        "lock_mode": lock_mode_manager.get_status()
     }
 
 
@@ -667,3 +669,170 @@ async def force_lock_door(
     log.info(f"🔒 Admin {current_admin['name']} force locked door")
 
     return {"message": "門已上鎖", "daytime_mode_ended": True}
+
+
+# === 手動鎖門模式 API ===
+
+@router.get("/door/lock-mode")
+async def get_lock_mode(admin_token: Optional[str] = Cookie(None)):
+    """查詢手動鎖門模式狀態"""
+    current_admin = get_current_admin(admin_token)
+    return lock_mode_manager.get_status()
+
+
+@router.post("/door/lock-mode")
+async def set_lock_mode(
+    always_lock: str = Form(...),
+    background_tasks: BackgroundTasks = None,
+    admin_token: Optional[str] = Cookie(None)
+):
+    """設定手動鎖門模式"""
+    current_admin = get_current_admin(admin_token)
+
+    # 將字符串轉換為 boolean
+    always_lock_bool = always_lock.lower() in ('true', '1', 'yes')
+    old_mode = lock_mode_manager.always_lock
+
+    # 設定新模式
+    lock_mode_manager.set_mode(always_lock_bool)
+
+    # 執行對應的門鎖操作
+    if always_lock_bool:
+        lock_door()
+        if daytime_manager.is_daytime_unlocked:
+            daytime_manager.set_daytime_unlocked(False)
+        mode_name = "隨時上鎖"
+    else:
+        unlock_persistent()
+        mode_name = "不上鎖"
+
+    # Telegram 通知
+    if background_tasks:
+        message = f"🔒 [鎖門模式變更] {mode_name}\n操作者：{current_admin['name']}"
+        background_tasks.add_task(send_telegram, message)
+
+    log.info(f"🔒 Admin {current_admin['name']} set lock mode to {mode_name}")
+
+    return {"message": f"鎖門模式已設為「{mode_name}」", "always_lock": always_lock_bool}
+
+
+# === 管理卡 API ===
+
+@router.get("/admin-cards")
+async def list_admin_cards(
+    admin_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """列出所有管理卡"""
+    current_admin = get_current_admin(admin_token)
+
+    admin_cards = db.query(Card).filter(Card.card_type == "admin").all()
+    result = []
+    for c in admin_cards:
+        user = db.query(User).filter(User.id == c.user_id).first() if c.user_id else None
+        result.append({
+            "id": c.id,
+            "rfid_uid": c.rfid_uid,
+            "nickname": c.nickname,
+            "user_id": c.user_id,
+            "user_name": user.name if user else None,
+            "student_id": user.student_id if user else None,
+            "is_shared": c.user_id is None,
+            "is_active": c.is_active,
+            "created_at": c.created_at.isoformat() if c.created_at else None
+        })
+
+    return result
+
+
+@router.post("/admin-cards")
+async def create_admin_card(
+    rfid_uid: str = Form(...),
+    nickname: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+    background_tasks: BackgroundTasks = None,
+    admin_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """新增管理卡（支援獨立共用卡與管理員專用卡）"""
+    current_admin = get_current_admin(admin_token)
+
+    # 檢查 RFID UID 是否已被使用
+    existing = db.query(Card).filter(Card.rfid_uid == rfid_uid).first()
+    if existing:
+        raise HTTPException(400, "此卡片 UID 已被使用")
+
+    # 如果提供 user_id，檢查使用者是否存在
+    user = None
+    if user_id:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(404, "使用者不存在")
+
+    # 創建管理卡
+    card = Card(
+        id=generate_uuid(),
+        rfid_uid=rfid_uid,
+        user_id=user_id,
+        nickname=nickname,
+        card_type="admin"
+    )
+    db.add(card)
+    db.commit()
+
+    card_type_name = f"{user.name} ({user.student_id})" if user else "共用管理卡"
+    log.info(f"🔑 Admin {current_admin['name']} created admin card: {rfid_uid} ({card_type_name})")
+
+    # Telegram 通知
+    if background_tasks:
+        message = f"🔑 新增管理卡：{card_type_name}\nRFID: {rfid_uid}\n操作者：{current_admin['name']}"
+        background_tasks.add_task(send_telegram, message)
+
+    return {"message": "管理卡已新增", "card_id": card.id}
+
+
+@router.delete("/admin-cards/{card_id}")
+async def delete_admin_card(
+    card_id: str,
+    background_tasks: BackgroundTasks,
+    admin_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """刪除管理卡"""
+    current_admin = get_current_admin(admin_token)
+
+    card = db.query(Card).filter(Card.id == card_id).first()
+    if not card:
+        raise HTTPException(404, "卡片不存在")
+
+    if card.card_type != "admin":
+        raise HTTPException(400, "此卡片不是管理卡")
+
+    # 取得卡片資訊
+    user = db.query(User).filter(User.id == card.user_id).first() if card.user_id else None
+    card_uid = card.rfid_uid
+    card_type_name = f"{user.name} ({user.student_id})" if user else "共用管理卡"
+
+    # 刪除卡片
+    db.delete(card)
+    db.commit()
+
+    # Telegram 通知
+    message = f"🗑️ 刪除管理卡：{card_type_name}\nRFID: {card_uid}\n操作者：{current_admin['name']}"
+    background_tasks.add_task(send_telegram, message)
+
+    log.info(f"🗑️ Admin {current_admin['name']} deleted admin card {card_uid}")
+
+    return {"message": "管理卡已刪除"}
+
+
+# === 系統資訊 API ===
+
+@router.get("/version")
+async def get_version():
+    """查詢系統版本資訊（無需登入）"""
+    return {
+        "version": VERSION,
+        "codename": VERSION_CODENAME,
+        "full_version": f"{VERSION} \"{VERSION_CODENAME}\""
+    }

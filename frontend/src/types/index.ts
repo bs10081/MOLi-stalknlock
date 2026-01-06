@@ -18,6 +18,18 @@ export interface Card {
   created_at: string
 }
 
+export interface AdminCard {
+  id: string
+  rfid_uid: string
+  nickname?: string
+  user_id?: string
+  user_name?: string
+  student_id?: string
+  is_shared: boolean
+  is_active: boolean
+  created_at: string
+}
+
 export interface Admin {
   id: string
   username: string
@@ -32,6 +44,25 @@ export interface AccessLog {
   rfid_uid: string
   action: 'entry' | 'register'
   timestamp: string
+}
+
+export interface LockMode {
+  always_lock: boolean
+  mode_name: string
+}
+
+export interface DaytimeMode {
+  daytime_mode_enabled: boolean
+  is_daytime_hours: boolean
+  is_daytime_unlocked: boolean
+  first_unlock_user?: string
+  first_unlock_time?: string
+}
+
+export interface DoorStatus {
+  is_locked: boolean
+  daytime_mode: DaytimeMode
+  lock_mode: LockMode
 }
 
 export interface ApiResponse<T = any> {

@@ -3,6 +3,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Version (Semantic Versioning)
+VERSION = "2.1.0"
+VERSION_CODENAME = "Lock Commander"  # Optional codename for release
+
 # Development Mode
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
 
