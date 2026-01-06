@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import pytz
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
@@ -13,8 +14,11 @@ from app.routers import api, web, admin
 from app.database import init_db, get_db, User, Card, RegistrationSession, AccessLog
 
 from app.services.rfid_reader import rfid_reader
-from app.services.gpio_control import open_lock, deny_access
+from app.services.gpio_control import (
+    open_lock, deny_access, unlock_persistent, lock_door, daytime_manager
+)
 from app.services.telegram import send_telegram
+from app.config import DAYTIME_END_HOUR, DAYTIME_MODE_ENABLED, TIMEZONE
 
 # Logging setup
 logging.basicConfig(
@@ -76,12 +80,33 @@ async def handle_normal_mode(card_uid: str):
             card_info = f" ({card.nickname})" if card.nickname else ""
             log.info(f"✅ Access granted: {user.name} ({user.student_id}){card_info}")
 
-            # 第一優先級：立即開門（同步執行，不等待）
-            open_lock()
+            # === 白天模式判斷 ===
+            if daytime_manager.should_use_daytime_mode():
+                if not daytime_manager.is_daytime_unlocked:
+                    # 第一次解鎖：持續解鎖
+                    unlock_persistent()
+                    daytime_manager.set_daytime_unlocked(
+                        True,
+                        f"{user.name} ({user.student_id})"
+                    )
+                    log.info(f"🌞 Daytime mode activated by {user.name}")
 
-            # 背景任務：記錄和通知（不阻塞）
+                    # Telegram 通知（白天模式啟動）
+                    message = f"🌞 [白天模式] {user.name} ({user.student_id}) 開啟門禁{card_info}\n門將保持解鎖至 {DAYTIME_END_HOUR}:00"
+                    asyncio.create_task(asyncio.to_thread(send_telegram, message))
+                else:
+                    # 已經解鎖：只記錄，不操作門鎖
+                    log.info(f"🌞 Daytime mode: Door already unlocked, logging only")
+            else:
+                # 正常模式：開門後自動鎖回
+                open_lock()
+
+                # Telegram 通知
+                message = f"歡迎！{user.name} ({user.student_id}) 解鎖門禁{card_info}"
+                asyncio.create_task(asyncio.to_thread(send_telegram, message))
+
+            # 背景任務：記錄存取日誌（兩種模式都要記錄）
             async def background_tasks():
-                # 資料庫寫入（記錄使用哪張卡）
                 try:
                     db.add(AccessLog(
                         user_id=user.id,
@@ -93,11 +118,6 @@ async def handle_normal_mode(card_uid: str):
                 except Exception as e:
                     log.error(f"Failed to log access: {e}")
 
-                # Telegram 通知（非阻塞）
-                message = f"歡迎！{user.name} ({user.student_id}) 解鎖門禁{card_info}"
-                await asyncio.to_thread(send_telegram, message)
-
-            # 在背景執行任務
             asyncio.create_task(background_tasks())
         else:
             log.warning(f"⚠️ Unknown card: {card_uid}")
@@ -210,6 +230,63 @@ async def handle_register_mode(card_uid: str):
     finally:
         db.close()
 
+async def auto_lock_scheduler():
+    """自動鎖門排程器 - 每天在指定時間鎖門"""
+    tz = pytz.timezone(TIMEZONE)
+
+    while True:
+        now = datetime.now(tz)
+
+        # 計算到今天結束時間的秒數
+        target_time = now.replace(
+            hour=DAYTIME_END_HOUR,
+            minute=0,
+            second=0,
+            microsecond=0
+        )
+
+        if now >= target_time:
+            # 已過結束時間，等到明天
+            target_time += timedelta(days=1)
+
+        wait_seconds = (target_time - now).total_seconds()
+        log.info(f"⏰ Auto-lock scheduled in {wait_seconds:.0f} seconds ({target_time.strftime('%Y-%m-%d %H:%M:%S')})")
+
+        await asyncio.sleep(wait_seconds)
+
+        # 執行鎖門
+        if daytime_manager.is_daytime_unlocked:
+            log.info(f"🔒 Auto-lock triggered at {DAYTIME_END_HOUR}:00")
+            lock_door()
+            daytime_manager.set_daytime_unlocked(False)
+
+            # Telegram 通知
+            await asyncio.to_thread(
+                send_telegram,
+                f"🌙 [白天模式結束] 門已自動上鎖 ({DAYTIME_END_HOUR}:00)"
+            )
+
+        # 等待 1 分鐘避免重複觸發
+        await asyncio.sleep(60)
+
+async def check_daytime_status_on_startup():
+    """啟動時檢查白天模式狀態"""
+    if not DAYTIME_MODE_ENABLED:
+        return
+
+    tz = pytz.timezone(TIMEZONE)
+    now = datetime.now(tz)
+
+    if daytime_manager.is_daytime_hours():
+        log.info(f"🌞 System started during daytime hours ({now.strftime('%H:%M')})")
+        log.info("   Daytime mode available - waiting for first card scan")
+        # 安全考量：不自動解鎖，等待第一次刷卡
+    else:
+        log.info(f"🌙 System started outside daytime hours ({now.strftime('%H:%M')})")
+        # 確保門是鎖上的
+        lock_door()
+        daytime_manager.set_daytime_unlocked(False)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
@@ -220,9 +297,17 @@ async def lifespan(app: FastAPI):
     init_db()
     log.info("✅ Database initialized")
 
+    # 檢查啟動時的白天模式狀態
+    await check_daytime_status_on_startup()
+
     # Start RFID reader in background
     asyncio.create_task(rfid_reader.read_loop(handle_rfid_scan))
     log.info("✅ RFID reader started")
+
+    # 啟動自動鎖門排程器
+    if DAYTIME_MODE_ENABLED:
+        asyncio.create_task(auto_lock_scheduler())
+        log.info("✅ Auto-lock scheduler started")
 
     log.info("✅ System ready!")
 
@@ -230,6 +315,10 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     log.info("Shutting down...")
+    # 關機時確保門鎖上
+    if daytime_manager.is_daytime_unlocked:
+        lock_door()
+        log.info("🔒 Door locked on shutdown")
 
 # Create FastAPI app
 app = FastAPI(

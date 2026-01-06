@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from app.database import get_db, User, Card, Admin, AccessLog, generate_uuid
 from app.services.telegram import send_telegram
-from app.services.gpio_control import open_lock
+from app.services.gpio_control import open_lock, lock_door, get_lock_state, daytime_manager
 from app.services.auth import verify_access_token, hash_password
 
 log = logging.getLogger(__name__)
@@ -633,3 +633,37 @@ async def update_user(
     log.info(f"✏️ Admin {current_admin['name']} updated user: {old_name} ({old_student_id}) → {name} ({student_id}){status_msg}")
 
     return {"message": "用戶資料已更新"}
+
+
+# === 門鎖控制 API ===
+
+@router.get("/door/status")
+async def get_door_status(admin_token: Optional[str] = Cookie(None)):
+    """查詢門鎖狀態（包含白天模式）"""
+    current_admin = get_current_admin(admin_token)
+
+    return {
+        "is_locked": not get_lock_state(),
+        "daytime_mode": daytime_manager.get_status()
+    }
+
+
+@router.post("/door/lock")
+async def force_lock_door(
+    background_tasks: BackgroundTasks,
+    admin_token: Optional[str] = Cookie(None)
+):
+    """強制鎖門（結束白天模式）"""
+    current_admin = get_current_admin(admin_token)
+
+    # 執行鎖門
+    lock_door()
+    daytime_manager.set_daytime_unlocked(False)
+
+    # Telegram 通知
+    message = f"🔒 [手動鎖門] 操作者：{current_admin['name']}"
+    background_tasks.add_task(send_telegram, message)
+
+    log.info(f"🔒 Admin {current_admin['name']} force locked door")
+
+    return {"message": "門已上鎖", "daytime_mode_ended": True}
