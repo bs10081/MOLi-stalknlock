@@ -18,7 +18,7 @@ from app.services.gpio_control import (
     open_lock, deny_access, unlock_persistent, lock_door, daytime_manager, lock_mode_manager
 )
 from app.services.telegram import send_telegram
-from app.config import DAYTIME_END_HOUR, DAYTIME_MODE_ENABLED, TIMEZONE, VERSION, VERSION_CODENAME
+from app.config import DAYTIME_END_HOUR, DAYTIME_START_HOUR, DAYTIME_MODE_ENABLED, TIMEZONE, VERSION, VERSION_CODENAME
 
 # Logging setup
 logging.basicConfig(
@@ -319,6 +319,36 @@ async def auto_lock_scheduler():
         # 等待 1 分鐘避免重複觸發
         await asyncio.sleep(60)
 
+async def lock_mode_reset_scheduler():
+    """手動鎖門模式重置排程器 - 每天 08:00 檢查是否需要重置"""
+    tz = pytz.timezone(TIMEZONE)
+
+    while True:
+        now = datetime.now(tz)
+
+        # 計算到今天 DAYTIME_START_HOUR 的秒數
+        target_time = now.replace(
+            hour=DAYTIME_START_HOUR,
+            minute=0,
+            second=0,
+            microsecond=0
+        )
+
+        if now >= target_time:
+            # 已過開始時間，等到明天
+            target_time += timedelta(days=1)
+
+        wait_seconds = (target_time - now).total_seconds()
+        log.info(f"⏰ Lock mode reset check scheduled in {wait_seconds:.0f} seconds ({target_time.strftime('%Y-%m-%d %H:%M:%S')})")
+
+        await asyncio.sleep(wait_seconds)
+
+        # 檢查是否需要重置手動模式
+        lock_mode_manager.reset_if_needed()
+
+        # 等待 1 分鐘避免重複觸發
+        await asyncio.sleep(60)
+
 async def check_daytime_status_on_startup():
     """啟動時檢查白天模式狀態"""
     if not DAYTIME_MODE_ENABLED:
@@ -358,6 +388,10 @@ async def lifespan(app: FastAPI):
     if DAYTIME_MODE_ENABLED:
         asyncio.create_task(auto_lock_scheduler())
         log.info("✅ Auto-lock scheduler started")
+
+    # 啟動手動鎖門模式重置排程器
+    asyncio.create_task(lock_mode_reset_scheduler())
+    log.info("✅ Lock mode reset scheduler started")
 
     log.info("✅ System ready!")
 

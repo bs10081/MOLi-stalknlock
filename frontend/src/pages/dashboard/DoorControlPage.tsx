@@ -15,6 +15,7 @@ export const DoorControlPage: React.FC = () => {
 
   // 鎖門模式狀態
   const [lockMode, setLockMode] = useState<boolean>(false)
+  const [forceMode, setForceMode] = useState<boolean>(false)
   const [isTogglingMode, setIsTogglingMode] = useState(false)
 
   // 管理卡狀態
@@ -47,6 +48,7 @@ export const DoorControlPage: React.FC = () => {
       const status = await adminService.getDoorStatus()
       setDoorStatus(status.is_locked ? 'locked' : 'unlocked')
       setLockMode(status.lock_mode.always_lock)
+      setForceMode(status.lock_mode.force_permanent)
     } catch (err) {
       console.error('Failed to load door status:', err)
     }
@@ -87,12 +89,26 @@ export const DoorControlPage: React.FC = () => {
   const handleToggleLockMode = async (newMode: boolean) => {
     setIsTogglingMode(true)
     try {
-      await adminService.setLockMode(newMode)
+      await adminService.setLockMode(newMode, forceMode)
       setLockMode(newMode)
       await loadDoorStatus()
     } catch (err: any) {
       console.error('Failed to toggle lock mode:', err)
       setError(err.response?.data?.detail || '切換鎖門模式失敗')
+    } finally {
+      setIsTogglingMode(false)
+    }
+  }
+
+  const handleToggleForceMode = async (newForceMode: boolean) => {
+    setIsTogglingMode(true)
+    try {
+      await adminService.setLockMode(lockMode, newForceMode)
+      setForceMode(newForceMode)
+      await loadDoorStatus()
+    } catch (err: any) {
+      console.error('Failed to toggle force mode:', err)
+      setError(err.response?.data?.detail || '切換永久模式失敗')
     } finally {
       setIsTogglingMode(false)
     }
@@ -189,6 +205,27 @@ export const DoorControlPage: React.FC = () => {
                   size="lg"
                 />
               </div>
+
+              {/* Force 永久模式開關 - 僅在 Always Lock 開啟時顯示 */}
+              {lockMode && (
+                <>
+                  <div className="border-t border-border my-4" />
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-4">
+                    <div>
+                      <p className="font-medium mb-1">永久模式</p>
+                      <p className="text-sm text-text-secondary">
+                        {forceMode ? '保持隨時上鎖，不會在隔天 08:00 自動重置' : '隔天 08:00 自動恢復白天模式'}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={forceMode}
+                      onChange={handleToggleForceMode}
+                      disabled={isTogglingMode}
+                      size="lg"
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="text-sm">
                 <p className="text-text-secondary mb-2">當前狀態：</p>

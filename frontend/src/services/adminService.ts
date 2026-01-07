@@ -75,9 +75,10 @@ export const adminService = {
     return response.data
   },
 
-  setLockMode: async (always_lock: boolean) => {
+  setLockMode: async (always_lock: boolean, force: boolean = false) => {
     const formData = new FormData()
     formData.append('always_lock', always_lock.toString())
+    formData.append('force', force.toString())
     return api.post('/admin/door/lock-mode', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',

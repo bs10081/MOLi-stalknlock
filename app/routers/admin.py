@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from app.database import get_db, User, Card, Admin, AccessLog, generate_uuid
 from app.services.telegram import send_telegram
-from app.services.gpio_control import open_lock, lock_door, get_lock_state, daytime_manager, lock_mode_manager
+from app.services.gpio_control import open_lock, lock_door, get_lock_state, daytime_manager, lock_mode_manager, unlock_persistent
 from app.services.auth import verify_access_token, hash_password
 from app.config import VERSION, VERSION_CODENAME
 
@@ -683,18 +683,25 @@ async def get_lock_mode(admin_token: Optional[str] = Cookie(None)):
 @router.post("/door/lock-mode")
 async def set_lock_mode(
     always_lock: str = Form(...),
+    force: str = Form("false"),
     background_tasks: BackgroundTasks = None,
     admin_token: Optional[str] = Cookie(None)
 ):
-    """設定手動鎖門模式"""
+    """設定手動鎖門模式
+
+    Args:
+        always_lock: True = 隨時上鎖, False = 不上鎖
+        force: True = 永久保持, False = 隔天 08:00 自動重置
+    """
     current_admin = get_current_admin(admin_token)
 
     # 將字符串轉換為 boolean
     always_lock_bool = always_lock.lower() in ('true', '1', 'yes')
+    force_bool = force.lower() in ('true', '1', 'yes')
     old_mode = lock_mode_manager.always_lock
 
     # 設定新模式
-    lock_mode_manager.set_mode(always_lock_bool)
+    lock_mode_manager.set_mode(always_lock_bool, force_bool)
 
     # 執行對應的門鎖操作
     if always_lock_bool:
@@ -708,12 +715,21 @@ async def set_lock_mode(
 
     # Telegram 通知
     if background_tasks:
-        message = f"🔒 [鎖門模式變更] {mode_name}\n操作者：{current_admin['name']}"
+        # 只有在「隨時上鎖」模式下才顯示 force 狀態
+        if always_lock_bool:
+            force_msg = " (永久)" if force_bool else " (隔天 08:00 重置)"
+            message = f"🔒 [鎖門模式變更] {mode_name}{force_msg}\n操作者：{current_admin['name']}"
+        else:
+            message = f"🔒 [鎖門模式變更] {mode_name}\n操作者：{current_admin['name']}"
         background_tasks.add_task(send_telegram, message)
 
-    log.info(f"🔒 Admin {current_admin['name']} set lock mode to {mode_name}")
+    log.info(f"🔒 Admin {current_admin['name']} set lock mode to {mode_name} (force={force_bool})")
 
-    return {"message": f"鎖門模式已設為「{mode_name}」", "always_lock": always_lock_bool}
+    return {
+        "message": f"鎖門模式已設為「{mode_name}」",
+        "always_lock": always_lock_bool,
+        "force_permanent": force_bool
+    }
 
 
 # === 管理卡 API ===

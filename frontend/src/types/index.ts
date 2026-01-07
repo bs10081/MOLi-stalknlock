@@ -49,6 +49,7 @@ export interface AccessLog {
 export interface LockMode {
   always_lock: boolean
   mode_name: string
+  force_permanent: boolean
 }
 
 export interface DaytimeMode {

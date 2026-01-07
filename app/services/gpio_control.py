@@ -2,7 +2,7 @@ import time
 import logging
 import atexit
 import pytz
-from datetime import datetime
+from datetime import datetime, date
 from threading import Lock
 
 from app.config import (
@@ -193,6 +193,8 @@ class LockModeManager:
 
     def __init__(self):
         self._always_lock = False  # False = Stay Unlocked, True = Always Lock
+        self._force_permanent = False  # False = 隔天重置, True = 永久保持
+        self._set_date = None  # 記錄設定日期
         self._lock = Lock()
 
     @property
@@ -207,17 +209,57 @@ class LockModeManager:
             self._always_lock = not self._always_lock
             return self._always_lock
 
-    def set_mode(self, always_lock: bool):
-        """直接設定模式"""
+    def set_mode(self, always_lock: bool, force: bool = False):
+        """直接設定模式
+
+        Args:
+            always_lock: True = 隨時上鎖, False = 不上鎖
+            force: True = 永久保持, False = 隔天 08:00 自動重置
+        """
         with self._lock:
             self._always_lock = always_lock
+            self._force_permanent = force
+            self._set_date = date.today()
+
+    def check_should_reset(self) -> bool:
+        """檢查是否應該重置手動模式
+
+        Returns:
+            True 表示應該重置 (設定為 always_lock=False)
+        """
+        with self._lock:
+            # 如果是永久模式，不重置
+            if self._force_permanent:
+                return False
+
+            # 如果沒有設定日期記錄，不重置
+            if self._set_date is None:
+                return False
+
+            # 如果日期已經變更且當前是 always_lock，則應該重置
+            today = date.today()
+            if today > self._set_date and self._always_lock:
+                return True
+
+            return False
+
+    def reset_if_needed(self):
+        """如果需要則重置手動模式"""
+        if self.check_should_reset():
+            with self._lock:
+                self._always_lock = False
+                self._force_permanent = False
+                self._set_date = None
+                log.info("🔄 手動鎖門模式已自動重置 (非永久模式)")
 
     def get_status(self) -> dict:
         """取得當前狀態（供 API 查詢）"""
-        return {
-            "always_lock": self.always_lock,
-            "mode_name": "隨時上鎖" if self.always_lock else "不上鎖"
-        }
+        with self._lock:
+            return {
+                "always_lock": self._always_lock,
+                "mode_name": "隨時上鎖" if self._always_lock else "不上鎖",
+                "force_permanent": self._force_permanent
+            }
 
 
 # 全域實例
