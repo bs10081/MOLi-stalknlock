@@ -73,37 +73,6 @@ docker buildx build --platform linux/arm64 -t bs10081/moli-door:dev --push .
 ssh moli-door "cd /home/pi/Host/MOLi-stalknlock && docker compose pull && docker compose up -d"
 ```
 
-### Ubuntu Core 部署（不可變系統）
-
-適用於需要更高安全性與穩定性的生產環境。
-
-```bash
-# 1. 建置 Snap (在開發機器上)
-snapcraft --target-arch=arm64 --use-lxd
-
-# 2. 傳輸至樹莓派
-scp moli-door_*.snap <user>@<pi-ip>:~/
-
-# 3. 安裝
-sudo snap install ~/moli-door_*.snap --dangerous
-
-# 4. 連接硬體 interfaces
-sudo snap connect moli-door:raw-input
-sudo snap connect moli-door:gpio-chardev pi:gpio-chardev
-
-# 5. 檢查狀態
-snap services moli-door
-journalctl -u snap.moli-door.moli-door -f
-```
-
-**詳細安裝指南**: 參考 [scripts/install_ubuntu_core.md](scripts/install_ubuntu_core.md)
-
-**特點**：
-- ✅ 不可變系統架構，防止意外修改
-- ✅ 原子更新，失敗自動回滾
-- ✅ Strict confinement 安全隔離
-- ✅ 長期支援至 2036 年（Ubuntu Core 24）
-
 ## 專案結構
 
 ```

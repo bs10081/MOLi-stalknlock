@@ -18,7 +18,11 @@ python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ### 前端開發
 ```bash
-cd frontend && npm run dev
+cd frontend && npm install   # 安裝依賴
+cd frontend && npm run dev    # 開發伺服器 (localhost:5173)
+cd frontend && npm run build  # 生產建置
+cd frontend && npm run lint   # ESLint 檢查
+cd frontend && npm run preview # 預覽建置結果
 ```
 
 ### Docker 部署
@@ -108,6 +112,10 @@ ssh moli-door "cd /home/pi/Host/MOLi-stalknlock && docker compose build && docke
 - [ ] Docker 容器使用 `cap_add` 而非 `privileged`
 - [ ] 速率限制已測試（5 次失敗登入後鎖定 1 分鐘）
 - [ ] HTTPS 已啟用（Cookie secure 屬性生效）
+
+### 資料庫位置
+- **本地開發**: `./data/moli_door.db`
+- **Docker**: `/app/data/moli_door.db` (掛載至 host 的 `./data/`)
 
 ## RFID 刷卡流程
 
