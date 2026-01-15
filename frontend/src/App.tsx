@@ -1,6 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { LoginPage } from './pages/LoginPage'
-import { RegisterPage } from './pages/RegisterPage'
 import { HomePage } from './pages/HomePage'
 import { DashboardLayout } from './components/layout/DashboardLayout'
 import { OverviewPage } from './pages/dashboard/OverviewPage'
@@ -19,7 +18,6 @@ function App() {
         {/* 公開頁面 */}
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
 
         {/* Dashboard 頁面（帶 Sidebar 佈局）*/}
         <Route path="/dashboard" element={<DashboardLayout />}>

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { Search, Plus, Edit, Trash2, CreditCard, CheckCircle, QrCode } from 'lucide-react'
 import { userService } from '@/services/userService'
-import { registerService } from '@/services/registerService'
+import { cardBindingService } from '@/services/cardBindingService'
 import type { User } from '@/types'
 
 export const UsersPage: React.FC = () => {
@@ -109,7 +109,7 @@ export const UsersPage: React.FC = () => {
 
     try {
       // 提交到 /register 端點
-      await registerService.registerUser(
+      await cardBindingService.startBinding(
         registerFormData.studentId,
         registerFormData.name,
         registerFormData.email || undefined,
@@ -147,7 +147,7 @@ export const UsersPage: React.FC = () => {
     // 輪詢綁定狀態
     pollIntervalRef.current = window.setInterval(async () => {
       try {
-        const data = await registerService.checkBindingStatus(studentId)
+        const data = await cardBindingService.checkStatus(studentId)
 
         // 更新步驟
         setRegisterStep(data.step || 0)

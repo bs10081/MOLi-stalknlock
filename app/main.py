@@ -8,7 +8,12 @@ from fastapi import FastAPI, Depends, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from app.routers import api, web, admin
+from app.routers.dependencies import get_current_admin
 
 from app.database import init_db, get_db, User, Card, RegistrationSession, AccessLog
 
@@ -239,6 +244,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Setup rate limiter
+from app.config import RATE_LIMIT_ENABLED
+if RATE_LIMIT_ENABLED:
+    limiter = Limiter(key_func=get_remote_address)
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    log.info("✅ Rate limiting enabled")
+else:
+    log.info("⚠️ Rate limiting disabled")
+
 # Add CORS middleware for React SPA
 app.add_middleware(
     CORSMiddleware,
@@ -274,13 +289,17 @@ app.include_router(api.router)
 async def switch_to_register_mode(
     student_id: str = Form(...),
     nickname: str = Form(None),
+    admin: dict = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Switch system to registration mode for a specific student (支援卡片別名)"""
+    """Switch system to registration mode for a specific student (支援卡片別名)
+
+    **需要管理員權限**
+    """
     # 查詢或創建使用者
     user = db.query(User).filter(User.student_id == student_id).first()
     if not user:
-        log.error(f"❌ User not found: {student_id}")
+        log.error(f"❌ User not found: {student_id} (requested by {admin['name']})")
         return {"status": "error", "message": "使用者不存在"}
 
     # 計算當前卡片數量
@@ -314,7 +333,7 @@ async def switch_to_register_mode(
 
     db.commit()
 
-    log.info(f"🔄 Switched to REGISTER mode for {student_id} (initial cards: {initial_card_count}, nickname: {nickname})")
+    log.info(f"🔄 Admin {admin['name']} switched to REGISTER mode for {student_id} (initial cards: {initial_card_count}, nickname: {nickname or 'N/A'})")
     return {"status": "ok", "message": "請刷卡"}
 
 # Serve React SPA for all /admin/* and /dashboard/* routes (catch-all for React Router)

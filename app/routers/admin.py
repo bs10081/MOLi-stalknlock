@@ -4,10 +4,9 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 import pytz
 import logging
-import requests
 from datetime import datetime, timedelta
 
-from app.database import get_db, User, Card, Admin, AccessLog, generate_uuid
+from app.database import get_db, User, Card, Admin, AccessLog, RegistrationSession, generate_uuid
 from app.services.telegram import send_telegram
 from app.services.gpio_control import open_lock
 from app.services.auth import verify_access_token, hash_password
@@ -179,28 +178,55 @@ async def create_card(
 @router.post("/cards/bind")
 async def start_card_binding(
     user_id: str = Form(...),
+    nickname: Optional[str] = Form(None),
     admin_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db)
 ):
-    """啟動刷卡綁定模式（為指定使用者綁定新卡片）"""
+    """啟動刷卡綁定模式（為指定使用者綁定新卡片）
+
+    **重構說明**：
+    - 移除 HTTP 呼叫 `/mode/register`
+    - 直接操作資料庫（與 main.py 邏輯一致）
+    - 支援卡片別名參數
+    """
     current_admin = get_current_admin(admin_token)
 
+    # 查詢使用者
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "使用者不存在")
 
-    # 呼叫 /mode/register 切換模式
-    try:
-        response = requests.post(
-            "http://localhost:8000/mode/register",
-            params={"student_id": user.student_id}
-        )
-        response.raise_for_status()
-    except Exception as e:
-        log.error(f"Failed to start card binding mode: {e}")
-        raise HTTPException(500, "無法啟動刷卡綁定模式")
+    # 直接操作資料庫（取代 HTTP 呼叫）
+    initial_card_count = db.query(Card).filter(Card.user_id == user.id).count()
 
-    log.info(f"🔗 Admin {current_admin['name']} started card binding for {user.name} ({user.student_id})")
+    session = db.query(RegistrationSession).filter(
+        RegistrationSession.user_id == user.id
+    ).first()
+
+    if session:
+        # 更新現有 session
+        session.first_uid = None
+        session.step = 0
+        session.expires_at = datetime.utcnow() + timedelta(seconds=90)
+        session.initial_card_count = initial_card_count
+        session.completed = False
+        session.nickname = nickname
+    else:
+        # 創建新 session
+        session = RegistrationSession(
+            user_id=user.id,
+            first_uid=None,
+            step=0,
+            expires_at=datetime.utcnow() + timedelta(seconds=90),
+            initial_card_count=initial_card_count,
+            completed=False,
+            nickname=nickname
+        )
+        db.add(session)
+
+    db.commit()
+
+    log.info(f"🔗 Admin {current_admin['name']} started card binding for {user.name} ({user.student_id}), nickname: {nickname or 'N/A'}")
 
     return {"message": "請在90秒內刷卡兩次完成綁定", "student_id": user.student_id}
 
