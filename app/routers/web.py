@@ -5,13 +5,19 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import logging
 from datetime import datetime, timedelta
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.database import get_db, User, Card, Admin, RegistrationSession
 from app.services.telegram import send_telegram
 from app.services.auth import verify_password, create_access_token, verify_access_token
+from app.config import RATE_LIMIT_PER_MINUTE, RATE_LIMIT_ENABLED
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["web"])
+
+# Setup limiter
+limiter = Limiter(key_func=get_remote_address)
 
 # Templates
 templates = Jinja2Templates(directory="templates")
@@ -38,38 +44,42 @@ async def home(request: Request, admin_token: Optional[str] = Cookie(None)):
     })
 
 @router.post("/login")
+@limiter.limit(f"{RATE_LIMIT_PER_MINUTE}/minute") if RATE_LIMIT_ENABLED else lambda f: f
 async def login(
+    request: Request,  # 新增：slowapi 需要
     response: Response,
     username: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    """管理員登入"""
+    """管理員登入（帶速率限制）"""
     # 查詢管理員
     admin = db.query(Admin).filter(Admin.username == username).first()
-    
+
     if not admin or not verify_password(password, admin.password_hash):
+        log.warning(f"⚠️ Failed login attempt for username: {username}")
         raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
-    
+
     # 創建 JWT token
     token = create_access_token(data={
         "sub": admin.username,
         "id": admin.id,
         "name": admin.name
     })
-    
+
     log.info(f"✅ Admin login: {admin.name} ({admin.username})")
-    
-    # 設置 cookie
+
+    # 設置 cookie（增強安全性）
     response = JSONResponse({"status": "ok", "message": "登入成功"})
     response.set_cookie(
         key="admin_token",
         value=token,
         httponly=True,
-        max_age=28800,  # 8 hours
-        samesite="lax"
+        secure=True,  # HTTPS only
+        samesite="strict",  # 從 lax 改為 strict
+        max_age=28800  # 8 hours
     )
-    
+
     return response
 
 @router.post("/logout")
@@ -199,8 +209,17 @@ async def register_post(
     })
 
 @router.get("/check_status/{student_id}")
-async def check_status(student_id: str, db: Session = Depends(get_db)):
-    """Check if student has completed RFID binding (支援副卡檢測)"""
+async def check_status(
+    student_id: str,
+    admin_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """檢查卡片綁定狀態（僅管理員）"""
+    # 強制驗證管理員身份
+    current_admin = get_current_admin(admin_token)
+    if not current_admin:
+        raise HTTPException(status_code=401, detail="未授權：需要管理員權限")
+
     user = db.query(User).filter(User.student_id == student_id).first()
     if not user:
         return {"bound": False, "card_count": 0, "binding_in_progress": False}

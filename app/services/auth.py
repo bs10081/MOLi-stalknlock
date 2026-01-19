@@ -2,11 +2,12 @@ import bcrypt
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
+from app.config import JWT_SECRET_KEY, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
-# JWT 配置
-SECRET_KEY = "moli-door-secret-key-change-in-production"  # 生產環境應該改用 .env
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 小時
+# JWT 配置（從 config.py 讀取）
+SECRET_KEY = JWT_SECRET_KEY
+ALGORITHM = JWT_ALGORITHM
+# ACCESS_TOKEN_EXPIRE_MINUTES 已從 config 匯入
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
     """驗證密碼"""
