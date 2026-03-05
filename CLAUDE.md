@@ -211,3 +211,71 @@ frontend/
   │   └── App.tsx         # React Router 配置
   └── dist/               # 建置輸出（會被複製到 Docker）
 ```
+
+## 生產環境排錯
+
+### RFID 讀卡機故障診斷 (2026-03-03 經驗記錄)
+
+#### 常見症狀
+- RFID 讀卡機無法識別卡片
+- 日誌顯示 "No RFID device found" 或 "Specified device path not found"
+- 門鎖控制正常但刷卡無反應
+
+#### 快速診斷命令
+
+```bash
+# 1. 檢查容器日誌
+ssh pi@100.72.74.25 "cd ~/Host/MOLi-stalknlock && docker compose logs --tail=50 | grep -iE 'rfid|error'"
+
+# 2. 檢查 USB 設備
+ssh pi@100.72.74.25 "lsusb | grep -i reader"
+# 預期：Bus 001 Device XXX: ID ffff:0035 Sycreader RFID Technology Co., Ltd
+
+# 3. 檢查設備檔案
+ssh pi@100.72.74.25 "ls -la /dev/input/by-id/ | grep -i reader"
+
+# 4. 檢查環境變數
+ssh pi@100.72.74.25 "cat ~/Host/MOLi-stalknlock/.env | grep -E 'DEV_MODE|RFID'"
+```
+
+#### 關鍵日誌判讀
+
+| 日誌訊息 | 問題類型 | 解決方案 |
+|----------|----------|----------|
+| `No RFID device found` | 硬體未連接 | 重新插拔 USB |
+| `Specified device path not found` | 設備路徑變更 | 更新 .env 的 RFID_DEVICE_PATH |
+| `evdev not available` | 套件問題 | 重建 Docker 映像 |
+| `RFID Reader in DEVELOPMENT MODE` | DEV_MODE=true | 修改 .env 設為 false |
+
+#### 標準修復流程
+
+**最常見：USB 連接問題**
+```bash
+# 1. 重新插拔 USB（現場操作）
+# 2. 檢查設備識別
+ssh pi@100.72.74.25 "lsusb | grep -i reader"
+# 3. 重啟容器
+ssh pi@100.72.74.25 "cd ~/Host/MOLi-stalknlock && docker compose restart"
+# 4. 驗證日誌
+ssh pi@100.72.74.25 "cd ~/Host/MOLi-stalknlock && docker compose logs --tail=20 | grep RFID"
+```
+
+#### 驗證成功訊息
+
+```
+✅ RFID reader started
+✅ RFID device connected: Sycreader RFID Technology Co., Ltd SYC ID&IC USB Reader
+✅ RFID reader loop started
+```
+
+#### 刷卡測試
+
+```bash
+# 監控實時日誌
+ssh pi@100.72.74.25 "cd ~/Host/MOLi-stalknlock && docker compose logs -f"
+
+# 刷卡後預期輸出：
+# 📇 Card scanned: XXXXXXXXXX
+# ✅ Access granted: [使用者名稱]
+# 🔓 Unlocking door for 3 seconds
+```
