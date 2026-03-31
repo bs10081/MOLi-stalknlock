@@ -42,6 +42,12 @@ integrate_production_data.py
 *.swp
 *.swo
 
+# Claude Code (local settings)
+.claude/
+
+# Local test scripts
+test_*.py
+
 # OS
 .DS_Store
 Thumbs.db
