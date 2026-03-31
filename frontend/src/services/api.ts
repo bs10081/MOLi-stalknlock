@@ -1,12 +1,12 @@
-import axios from 'axios'
+import axios from "axios";
 
 const api = axios.create({
-  baseURL: '',  // 直接連接後端，不使用 proxy
+  baseURL: "", // 直接連接後端，不使用 proxy
   withCredentials: true, // 自動攜帶 cookie
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
-})
+});
 
 // 回應攔截器處理 401
 api.interceptors.response.use(
@@ -14,12 +14,12 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // 重導向到登入頁
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login'
+      if (!window.location.pathname.includes("/login")) {
+        window.location.href = "/admin/login";
       }
     }
-    return Promise.reject(error)
-  }
-)
+    return Promise.reject(error);
+  },
+);
 
-export default api
+export default api;

@@ -18,6 +18,14 @@ ENV/
 # Environment Variables
 .env
 *.env
+.env.production
+.env.development
+
+# Production data and reports
+INTEGRATION_REPORT.md
+PRODUCTION_READINESS_REPORT.md
+moli_door_production*.db
+integrate_production_data.py
 
 # Logs
 *.log

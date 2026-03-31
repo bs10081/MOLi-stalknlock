@@ -22,20 +22,10 @@ def get_current_admin(token: Optional[str] = Cookie(None, alias="admin_token")) 
         return None
     return verify_access_token(token)
 
-@router.get("/", response_class=HTMLResponse)
-async def home(request: Request, admin_token: Optional[str] = Cookie(None)):
-    """Registration home page (需要登入)"""
-    current_admin = get_current_admin(admin_token)
-    
-    if not current_admin:
-        # 未登入，顯示登入頁面
-        return templates.TemplateResponse("login.html", {"request": request})
-    
-    # 已登入，顯示註冊頁面
-    return templates.TemplateResponse("register.html", {
-        "request": request,
-        "admin": current_admin
-    })
+@router.get("/")
+async def home():
+    """Redirect root to admin dashboard"""
+    return RedirectResponse(url="/admin/dashboard", status_code=302)
 
 @router.post("/login")
 async def login(

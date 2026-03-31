@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { Button } from '@/components/ui/button'
@@ -9,21 +9,38 @@ import { authService } from '@/services/authService'
 export const DashboardLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [adminName, setAdminName] = useState<string>('管理員')
+  const [isLoading, setIsLoading] = useState(true)
+  const navigate = useNavigate()
 
-  // 獲取當前管理員資訊
+  // 檢查認證狀態
   useEffect(() => {
-    const fetchAdminInfo = async () => {
+    const checkAuthentication = async () => {
       try {
         const admin = await authService.checkAuth()
         if (admin && admin.name) {
           setAdminName(admin.name)
+        } else {
+          navigate('/login', { replace: true })
         }
-      } catch (error) {
-        console.error('Failed to fetch admin info:', error)
+      } catch {
+        navigate('/login', { replace: true })
+      } finally {
+        setIsLoading(false)
       }
     }
-    fetchAdminInfo()
-  }, [])
+    checkAuthentication()
+  }, [navigate])
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="mt-2 text-muted-foreground">載入中...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-white">
