@@ -1,4 +1,15 @@
-from sqlalchemy import create_engine, Column, String, TIMESTAMP, func, Integer, ForeignKey, Boolean
+from sqlalchemy import (
+    create_engine,
+    Column,
+    String,
+    TIMESTAMP,
+    func,
+    Integer,
+    ForeignKey,
+    Boolean,
+    inspect,
+    text,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 import uuid
@@ -59,6 +70,7 @@ class RegistrationSession(Base):
     initial_card_count = Column(Integer, default=0)  # 記錄開始綁定時的卡片數量
     completed = Column(Boolean, default=False, nullable=False)  # 標記綁定是否完成
     nickname = Column(String(50), nullable=True)  # 卡片別名（用於綁定時設置）
+    last_status = Column(String(50), nullable=True)
 
     # Relationship
     user = relationship("User")
@@ -81,3 +93,18 @@ def get_db():
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _ensure_runtime_columns()
+
+
+def _ensure_runtime_columns():
+    """Apply lightweight SQLite-safe schema additions needed by newer code paths."""
+    inspector = inspect(engine)
+    if "registration_sessions" not in inspector.get_table_names():
+        return
+
+    column_names = {column["name"] for column in inspector.get_columns("registration_sessions")}
+    if "last_status" not in column_names:
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE registration_sessions ADD COLUMN last_status VARCHAR(50)")
+            )

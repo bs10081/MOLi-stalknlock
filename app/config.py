@@ -27,6 +27,9 @@ LOCK_DURATION = int(os.getenv("LOCK_DURATION", "3"))
 # Registration
 REGISTER_TIMEOUT = int(os.getenv("REGISTER_TIMEOUT", "90"))
 
+# Cookies
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+
 # API
 API_KEY = os.getenv("API_KEY")
 

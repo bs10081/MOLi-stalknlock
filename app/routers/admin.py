@@ -1,29 +1,22 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Cookie, BackgroundTasks, Form
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
 import pytz
 import logging
 from datetime import datetime, timedelta
 
-from app.database import get_db, User, Card, Admin, AccessLog, RegistrationSession, generate_uuid
+from app.database import get_db, User, Card, Admin, AccessLog, generate_uuid
+from app.routers.dependencies import get_current_admin
+from app.services.card_uid import CardUIDNormalizationError, normalize_card_uid_input
+from app.services.registration import start_registration_session
 from app.services.telegram import send_telegram
 from app.services.gpio_control import open_lock
-from app.services.auth import verify_access_token, hash_password
+from app.services.auth import hash_password
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-def get_current_admin(token: Optional[str] = Cookie(None, alias="admin_token")) -> dict:
-    """驗證管理員身份，未登入則拋出 401"""
-    if not token:
-        raise HTTPException(401, "請先登入")
-
-    admin = verify_access_token(token)
-    if not admin:
-        raise HTTPException(401, "登入已過期")
-
-    return admin
 
 @router.get("/users")
 async def list_users(
@@ -138,7 +131,8 @@ async def list_all_cards(
 @router.post("/cards")
 async def create_card(
     user_id: str = Form(...),
-    rfid_uid: str = Form(...),
+    rfid_uid: Optional[str] = Form(None),
+    ios_scan_text: Optional[str] = Form(None),
     nickname: Optional[str] = Form(None),
     background_tasks: BackgroundTasks = None,
     admin_token: Optional[str] = Cookie(None),
@@ -152,28 +146,37 @@ async def create_card(
     if not user:
         raise HTTPException(404, "使用者不存在")
 
+    try:
+        normalized_rfid_uid = normalize_card_uid_input(rfid_uid, ios_scan_text)
+    except CardUIDNormalizationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
     # 檢查 RFID UID 是否已被使用
-    existing = db.query(Card).filter(Card.rfid_uid == rfid_uid).first()
+    existing = db.query(Card).filter(Card.rfid_uid == normalized_rfid_uid).first()
     if existing:
         raise HTTPException(400, "此卡片 UID 已被使用")
 
     card = Card(
         id=generate_uuid(),
-        rfid_uid=rfid_uid,
+        rfid_uid=normalized_rfid_uid,
         user_id=user_id,
         nickname=nickname
     )
     db.add(card)
     db.commit()
 
-    log.info(f"💳 Admin {current_admin['name']} created card for {user.name}: {rfid_uid}")
+    log.info(f"💳 Admin {current_admin['name']} created card for {user.name}: {normalized_rfid_uid}")
 
     # 背景發送通知
     if background_tasks:
-        message = f"💳 新增卡片：{user.name} ({user.student_id})\nRFID: {rfid_uid}\n操作者：{current_admin['name']}"
+        message = f"💳 新增卡片：{user.name} ({user.student_id})\nRFID: {normalized_rfid_uid}\n操作者：{current_admin['name']}"
         background_tasks.add_task(send_telegram, message)
 
-    return {"message": "卡片已新增", "card_id": card.id}
+    return {
+        "message": "卡片已新增",
+        "card_id": card.id,
+        "rfid_uid": normalized_rfid_uid,
+    }
 
 @router.post("/cards/bind")
 async def start_card_binding(
@@ -196,39 +199,25 @@ async def start_card_binding(
     if not user:
         raise HTTPException(404, "使用者不存在")
 
-    # 直接操作資料庫（取代 HTTP 呼叫）
-    initial_card_count = db.query(Card).filter(Card.user_id == user.id).count()
-
-    session = db.query(RegistrationSession).filter(
-        RegistrationSession.user_id == user.id
-    ).first()
-
-    if session:
-        # 更新現有 session
-        session.first_uid = None
-        session.step = 0
-        session.expires_at = datetime.utcnow() + timedelta(seconds=90)
-        session.initial_card_count = initial_card_count
-        session.completed = False
-        session.nickname = nickname
-    else:
-        # 創建新 session
-        session = RegistrationSession(
-            user_id=user.id,
-            first_uid=None,
-            step=0,
-            expires_at=datetime.utcnow() + timedelta(seconds=90),
-            initial_card_count=initial_card_count,
-            completed=False,
-            nickname=nickname
+    session, conflicting_session = start_registration_session(db, user.id, nickname)
+    if conflicting_session:
+        owner = conflicting_session.user
+        owner_label = (
+            f"{owner.name} ({owner.student_id})"
+            if owner else conflicting_session.user_id
         )
-        db.add(session)
-
-    db.commit()
+        raise HTTPException(
+            status_code=409,
+            detail=f"已有其他綁定流程進行中：{owner_label}",
+        )
 
     log.info(f"🔗 Admin {current_admin['name']} started card binding for {user.name} ({user.student_id}), nickname: {nickname or 'N/A'}")
 
-    return {"message": "請在90秒內刷卡兩次完成綁定", "student_id": user.student_id}
+    return {
+        "message": "請在90秒內刷卡兩次完成綁定（既有有效卡仍可正常通行）",
+        "student_id": user.student_id,
+        "initial_card_count": session.initial_card_count,
+    }
 
 @router.delete("/users/{user_id}")
 async def delete_user(
@@ -453,13 +442,22 @@ async def update_admin(
         raise HTTPException(404, "管理員不存在")
 
     old_name = admin.name
+    updated = False
 
-    if name:
+    if name is not None:
+        name = name.strip()
+        if not name:
+            raise HTTPException(400, "姓名不能為空白")
         admin.name = name
+        updated = True
+    if password is not None:
+        password = password.strip()
     if password:
         admin.password_hash = hash_password(password)
+        updated = True
 
-    db.commit()
+    if updated:
+        db.commit()
 
     log.info(f"✏️ Admin {current_admin['name']} updated admin: {old_name} → {admin.name}")
 
@@ -506,8 +504,8 @@ async def remote_unlock(
     """遠程開門"""
     current_admin = get_current_admin(admin_token)
 
-    # 立即開門
-    open_lock()
+    # 非阻塞地觸發開門，避免卡住整個事件迴圈
+    asyncio.create_task(asyncio.to_thread(open_lock))
 
     # 背景發送通知
     message = f"🚪 遠程開門操作\n操作者：{current_admin['name']}"
@@ -619,9 +617,6 @@ async def update_user(
     """修改用戶資料"""
     current_admin = get_current_admin(admin_token)
 
-    # 調試日誌：查看接收到的 is_active 值
-    log.info(f"🐛 DEBUG: Received is_active = '{is_active}' (type: {type(is_active)})")
-
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "用戶不存在")
@@ -641,8 +636,6 @@ async def update_user(
 
     # 將字符串轉換為 boolean
     is_active_bool = is_active.lower() in ('true', '1', 'yes')
-
-    log.info(f"🐛 DEBUG: Converted to is_active_bool = {is_active_bool}, old_active = {old_active}")
 
     user.name = name
     user.student_id = student_id

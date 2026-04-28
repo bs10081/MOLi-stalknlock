@@ -1,14 +1,12 @@
-from fastapi import APIRouter, Request, Depends, HTTPException, Form, Cookie
+from fastapi import APIRouter, Request, Depends, HTTPException, Form
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Optional
 import logging
 
-from app.database import get_db, User, Card, AccessLog, RegistrationSession
+from app.database import get_db, Card, AccessLog
+from app.routers.dependencies import get_current_admin
 from app.services.telegram import send_telegram
 from app.services.rfid_reader import rfid_reader
-from app.services.auth import verify_access_token
 from app.config import DEV_MODE
 
 log = logging.getLogger(__name__)
@@ -17,7 +15,7 @@ router = APIRouter(prefix="/api", tags=["api"])
 @router.post("/scan")
 async def api_scan(
     request: Request,
-    admin_token: Optional[str] = Cookie(None),
+    current_admin: dict = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """Handle RFID scan for access control (僅限管理員測試)
@@ -25,14 +23,6 @@ async def api_scan(
     **需要管理員權限**
     **僅在開發模式啟用**
     """
-    # 驗證管理員身份
-    if not admin_token:
-        raise HTTPException(401, "未授權：需要管理員權限")
-
-    current_admin = verify_access_token(admin_token)
-    if not current_admin:
-        raise HTTPException(401, "登入已過期")
-
     # 僅在開發模式啟用
     if not DEV_MODE:
         raise HTTPException(403, "此端點僅在開發模式可用")

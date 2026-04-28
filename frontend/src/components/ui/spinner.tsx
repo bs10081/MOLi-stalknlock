@@ -1,30 +1,29 @@
-import React from 'react'
-import { cn } from '@/lib/utils'
+import { Loader2Icon } from "lucide-react"
+import type React from "react"
 
-export interface SpinnerProps extends React.HTMLAttributes<HTMLDivElement> {
-  size?: 'sm' | 'md' | 'lg'
+import { cn } from "@/lib/utils"
+
+export interface SpinnerProps extends React.ComponentProps<typeof Loader2Icon> {
+  size?: "sm" | "md" | "lg"
 }
 
-const Spinner: React.FC<SpinnerProps> = ({ size = 'md', className }) => {
-  const sizes = {
-    sm: 'w-4 h-4 border-2',
-    md: 'w-12 h-12 border-4',
-    lg: 'w-16 h-16 border-4',
-  }
+const sizeClasses = {
+  sm: "size-4",
+  md: "size-5",
+  lg: "size-6",
+}
 
+export function Spinner({
+  className,
+  size = "md",
+  ...props
+}: SpinnerProps): React.ReactElement {
   return (
-    <div
-      className={cn(
-        'inline-block rounded-full border-solid border-border border-t-accent animate-spin',
-        sizes[size],
-        className
-      )}
+    <Loader2Icon
+      aria-label="Loading"
+      className={cn("animate-spin", sizeClasses[size], className)}
       role="status"
-      aria-label="載入中"
+      {...props}
     />
   )
 }
-
-Spinner.displayName = 'Spinner'
-
-export { Spinner }

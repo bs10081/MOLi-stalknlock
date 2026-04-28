@@ -1,4 +1,13 @@
+import axios from 'axios'
 import api from './api'
+
+const authApi = axios.create({
+  baseURL: '',
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
 
 export const authService = {
   login: async (username: string, password: string) => {
@@ -18,7 +27,7 @@ export const authService = {
 
   checkAuth: async () => {
     try {
-      const response = await api.get('/me')
+      const response = await authApi.get('/me')
       return response.data
     } catch (error) {
       return null

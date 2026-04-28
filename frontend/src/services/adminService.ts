@@ -34,8 +34,8 @@ export const adminService = {
 
   updateAdmin: async (id: string, name?: string, password?: string) => {
     const formData = new FormData()
-    if (name) formData.append('name', name)
-    if (password) formData.append('password', password)
+    if (name !== undefined) formData.append('name', name)
+    if (password !== undefined) formData.append('password', password)
     return api.put(`/admin/admins/${id}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',

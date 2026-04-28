@@ -1,6 +1,13 @@
 import api from './api'
 import type { User, Card } from '../types'
 
+interface CreateCardPayload {
+  userId: string
+  rfidUid?: string
+  iosScanText?: string
+  nickname?: string
+}
+
 export const userService = {
   getUsers: async () => {
     const response = await api.get<User[]>('/admin/users')
@@ -27,12 +34,6 @@ export const userService = {
     if (email !== undefined) formData.append('email', email || '')
     if (telegram_id !== undefined) formData.append('telegram_id', telegram_id || '')
     if (is_active !== undefined) formData.append('is_active', is_active.toString())
-
-    console.log('🐛 DEBUG userService.updateUser: is_active =', is_active, 'toString =', is_active?.toString())
-    console.log('🐛 DEBUG FormData entries:')
-    for (let pair of formData.entries()) {
-      console.log('  ', pair[0], '=', pair[1])
-    }
 
     return api.put(`/admin/users/${id}`, formData, {
       headers: {
@@ -92,10 +93,11 @@ export const userService = {
     })
   },
 
-  createCard: async (userId: string, rfidUid: string, nickname?: string) => {
+  createCard: async ({ userId, rfidUid, iosScanText, nickname }: CreateCardPayload) => {
     const formData = new FormData()
     formData.append('user_id', userId)
-    formData.append('rfid_uid', rfidUid)
+    if (rfidUid !== undefined) formData.append('rfid_uid', rfidUid)
+    if (iosScanText !== undefined) formData.append('ios_scan_text', iosScanText)
     if (nickname) formData.append('nickname', nickname)
     return api.post('/admin/cards', formData, {
       headers: {
@@ -114,14 +116,13 @@ export const userService = {
     })
   },
 
-  // 新增：啟動卡片綁定模式（使用 /mode/register 端點，支援卡片別名）
-  startCardBindingWithNickname: async (studentId: string, nickname?: string) => {
-    const params = new URLSearchParams()
-    params.append('student_id', studentId)
-    if (nickname) params.append('nickname', nickname)
-    return api.post('/mode/register', params, {
+  startCardBindingWithNickname: async (userId: string, nickname?: string) => {
+    const formData = new FormData()
+    formData.append('user_id', userId)
+    if (nickname) formData.append('nickname', nickname)
+    return api.post('/admin/cards/bind', formData, {
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'multipart/form-data',
       },
     })
   },

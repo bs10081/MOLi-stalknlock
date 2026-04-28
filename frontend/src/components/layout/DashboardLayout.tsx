@@ -5,6 +5,12 @@ import { Sidebar } from './Sidebar'
 import { Button } from '@/components/ui/button'
 import { UserMenu } from '@/components/ui/user-menu'
 import { authService } from '@/services/authService'
+import { ADMIN_PROFILE_UPDATED_EVENT } from '@/lib/adminProfileEvents'
+
+interface CurrentAdmin {
+  id: string
+  name: string
+}
 
 export const DashboardLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -14,15 +20,27 @@ export const DashboardLayout: React.FC = () => {
   useEffect(() => {
     const fetchAdminInfo = async () => {
       try {
-        const admin = await authService.checkAuth()
+        const admin = await authService.checkAuth() as CurrentAdmin | null
         if (admin && admin.name) {
           setAdminName(admin.name)
+        } else {
+          setAdminName('管理員')
         }
       } catch (error) {
         console.error('Failed to fetch admin info:', error)
       }
     }
-    fetchAdminInfo()
+
+    const handleAdminProfileUpdated = () => {
+      void fetchAdminInfo()
+    }
+
+    void fetchAdminInfo()
+    window.addEventListener(ADMIN_PROFILE_UPDATED_EVENT, handleAdminProfileUpdated)
+
+    return () => {
+      window.removeEventListener(ADMIN_PROFILE_UPDATED_EVENT, handleAdminProfileUpdated)
+    }
   }, [])
 
   return (

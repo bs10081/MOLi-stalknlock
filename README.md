@@ -16,7 +16,7 @@ MOLi 實驗室 RFID 門禁系統，部署於 Raspberry Pi。
 
 - ✅ **JWT 金鑰環境變數化**：SECRET_KEY 從環境變數讀取，啟動時強制驗證
 - ✅ **登入速率限制**：防止暴力破解（5 次/分鐘）
-- ✅ **Cookie 安全屬性**：`httponly=True`, `secure=True`, `samesite=strict`
+- ✅ **Cookie 安全屬性**：`httponly=True`, `samesite=strict`，並可透過 `COOKIE_SECURE` 依部署環境切換
 - ✅ **Docker 最小權限**：使用 `cap_add: SYS_RAWIO` 取代 `privileged`
 - ✅ **管理員專屬註冊**：公開註冊路由已移除，提升系統安全性
 
@@ -101,7 +101,7 @@ static/               # CSS 靜態資源
 
 ## 管理介面
 
-訪問 `http://your-device-ip:8000/admin` 並使用管理員帳號登入。
+訪問 `http://your-device-ip:8000/admin/` 並使用管理員帳號登入。
 
 **重要提醒**：公開註冊路由已移除，所有新增使用者/綁定卡片操作需透過管理介面執行：
 - **UsersPage**：新增用戶並綁定卡片
@@ -121,6 +121,11 @@ JWT_SECRET_KEY=your-secure-random-32-char-secret-key-here
 # 速率限制（保護登入端點）
 RATE_LIMIT_ENABLED=true
 RATE_LIMIT_PER_MINUTE=5
+
+# Cookie Secure 屬性
+# 直接用 http://device-ip:8000 部署時請保持 false；
+# 若前面有 HTTPS 反向代理或 TLS 終止層，請設為 true。
+COOKIE_SECURE=false
 ```
 
 ### 系統配置範例
@@ -145,6 +150,9 @@ LOCK_DURATION=3
 
 # 註冊超時
 REGISTER_TIMEOUT=90
+
+# Cookie Secure 屬性（HTTPS 部署請改為 true）
+COOKIE_SECURE=false
 ```
 
 ## 資料庫模型

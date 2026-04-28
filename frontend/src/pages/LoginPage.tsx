@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,8 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+  const redirectTarget = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/dashboard'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,7 +22,7 @@ export const LoginPage: React.FC = () => {
 
     try {
       await authService.login(username, password)
-      navigate('/dashboard')
+      navigate(redirectTarget, { replace: true })
     } catch (err: any) {
       setError(err.response?.data?.detail || '帳號或密碼錯誤')
     } finally {

@@ -7,6 +7,7 @@ interface EditPanelProps {
   onSave: () => void
   onCancel: () => void
   onDelete?: () => void
+  saveDisabled?: boolean
   saving?: boolean
   deleting?: boolean
   className?: string
@@ -17,6 +18,7 @@ export const EditPanel: React.FC<EditPanelProps> = ({
   onSave,
   onCancel,
   onDelete,
+  saveDisabled = false,
   saving = false,
   deleting = false,
   className = '',
@@ -57,7 +59,7 @@ export const EditPanel: React.FC<EditPanelProps> = ({
             </Button>
             <Button
               onClick={onSave}
-              disabled={saving || deleting}
+              disabled={saving || deleting || saveDisabled}
             >
               {saving ? '儲存中...' : '儲存'}
             </Button>

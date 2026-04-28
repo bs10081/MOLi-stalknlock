@@ -92,10 +92,7 @@ export const PersonnelPage: React.FC = () => {
     if (!confirm(`確定要刪除 ${selectedIds.size} 位使用者嗎？此操作無法復原。`)) return
 
     try {
-      // TODO: 實作批量刪除 API
-      for (const id of Array.from(selectedIds)) {
-        await userService.deleteUser(id)
-      }
+      await userService.bulkDeleteUsers(Array.from(selectedIds))
       await loadUsers()
       setSelectedIds(new Set())
       alert('批量刪除成功')

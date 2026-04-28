@@ -9,8 +9,19 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { EditPanel } from '@/components/ui/edit-panel'
 import { BulkActionBar } from '@/components/ui/bulk-action-bar'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/dialog'
-import { Search, Plus, X, ChevronRight, CreditCard, QrCode, CheckCircle } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogBody,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
+import { Textarea } from '@/components/ui/textarea'
+import { Search, Plus, X, ChevronRight, CreditCard, QrCode, CheckCircle, Import } from 'lucide-react'
 import { Meter, MeterIndicator, MeterLabel, MeterTrack, MeterValue } from '@/components/ui/meter'
 import { Spinner } from '@/components/ui/spinner'
 import { userService } from '@/services/userService'
@@ -25,6 +36,8 @@ interface FormDataType {
   nickname: string
   is_active: boolean
 }
+
+type AddInputMode = 'manual' | 'ios'
 
 export const CardsPage: React.FC = () => {
   const [searchParams] = useSearchParams()
@@ -46,12 +59,15 @@ export const CardsPage: React.FC = () => {
 
   // 新增卡片狀態
   const [isAddFormOpen, setIsAddFormOpen] = useState(false)
+  const [addInputMode, setAddInputMode] = useState<AddInputMode>('manual')
   const [addFormData, setAddFormData] = useState({
     userId: '',
     rfidUid: '',
+    iosScanText: '',
     nickname: '',
   })
   const [addSaving, setAddSaving] = useState(false)
+  const [addErrorMessage, setAddErrorMessage] = useState<string | null>(null)
 
   // ========== 綁定 Dialog 狀態 ==========
   const [isBindingDialogOpen, setIsBindingDialogOpen] = useState(false)
@@ -126,10 +142,7 @@ export const CardsPage: React.FC = () => {
     if (!confirm(`確定要刪除 ${selectedIds.size} 張卡片嗎？此操作無法復原。`)) return
 
     try {
-      // TODO: 實作批量刪除 API
-      for (const id of Array.from(selectedIds)) {
-        await userService.deleteCard(id)
-      }
+      await userService.bulkDeleteCards(Array.from(selectedIds))
       await loadData()
       setSelectedIds(new Set())
       alert('批量刪除成功')
@@ -265,44 +278,69 @@ export const CardsPage: React.FC = () => {
   }
 
   // ========== 新增卡片邏輯 ==========
-  const handleAdd = () => {
-    setIsAddFormOpen(true)
+  const resetAddForm = (nextUserId: string = userIdFilter || '') => {
+    setAddInputMode('manual')
+    setAddErrorMessage(null)
     setAddFormData({
-      userId: userIdFilter || '',
+      userId: nextUserId,
       rfidUid: '',
+      iosScanText: '',
       nickname: '',
     })
+  }
+
+  const handleAdd = () => {
+    setIsAddFormOpen(true)
+    resetAddForm()
   }
 
   const handleCancelAdd = () => {
     setIsAddFormOpen(false)
-    setAddFormData({
-      userId: '',
-      rfidUid: '',
-      nickname: '',
-    })
+    resetAddForm('')
+  }
+
+  const handleAddInputModeChange = (mode: AddInputMode) => {
+    setAddInputMode(mode)
+    setAddErrorMessage(null)
+    setAddFormData((prev) => ({
+      ...prev,
+      rfidUid: mode === 'manual' ? prev.rfidUid : '',
+      iosScanText: mode === 'ios' ? prev.iosScanText : '',
+    }))
   }
 
   const handleAddCard = async () => {
-    if (!addFormData.userId || !addFormData.rfidUid) {
-      alert('請選擇使用者並輸入卡片 ID')
+    if (!addFormData.userId) {
+      setAddErrorMessage('請先選擇使用者')
+      return
+    }
+
+    if (addInputMode === 'manual' && !addFormData.rfidUid.trim()) {
+      setAddErrorMessage('請輸入卡片 ID')
+      return
+    }
+
+    if (addInputMode === 'ios' && !addFormData.iosScanText.trim()) {
+      setAddErrorMessage('請貼上 iOS NFC Tools 的 Tag detail 或 Serial number')
       return
     }
 
     try {
       setAddSaving(true)
-      await userService.createCard(
-        addFormData.userId,
-        addFormData.rfidUid,
-        addFormData.nickname || undefined
-      )
+      setAddErrorMessage(null)
+      const response = await userService.createCard({
+        userId: addFormData.userId,
+        rfidUid: addInputMode === 'manual' ? addFormData.rfidUid.trim() : undefined,
+        iosScanText: addInputMode === 'ios' ? addFormData.iosScanText.trim() : undefined,
+        nickname: addFormData.nickname.trim() || undefined,
+      })
       await loadData()
       setIsAddFormOpen(false)
-      setAddFormData({ userId: '', rfidUid: '', nickname: '' })
-      alert('卡片新增成功')
+      resetAddForm('')
+      alert(`卡片新增成功：${response.data.rfid_uid}`)
     } catch (err: any) {
       console.error('Failed to create card:', err)
-      alert(err.response?.data?.detail || '新增卡片失敗')
+      setAddErrorMessage(err.response?.data?.detail || '新增卡片失敗')
     } finally {
       setAddSaving(false)
     }
@@ -365,7 +403,7 @@ export const CardsPage: React.FC = () => {
     clearBindingIntervals()
     setBindingStatus('idle')
     setIsBindingDialogOpen(false)
-    setAddFormData({ userId: '', rfidUid: '', nickname: '' })
+    resetAddForm('')
   }
 
   // Dialog 關閉處理
@@ -378,25 +416,30 @@ export const CardsPage: React.FC = () => {
       setBindingStep(0)
       setBindingCountdown(90)
       setBindingMessage('')
-      setAddFormData({ userId: '', rfidUid: '', nickname: '' })
+      resetAddForm('')
     }
   }
 
   const handleStartBinding = async () => {
     if (!addFormData.userId) {
-      alert('請選擇使用者')
+      setAddErrorMessage('請先選擇使用者')
+      return
+    }
+
+    if (addInputMode === 'ios') {
+      setAddErrorMessage('iOS 匯入是直接建立卡片，不需要再進入綁定模式')
       return
     }
 
     try {
       setAddSaving(true)
+      setAddErrorMessage(null)
 
       // 取得 student_id
       const user = users.find(u => u.id === addFormData.userId)
       if (!user) throw new Error('找不到使用者資料')
 
-      // 使用新的綁定方法，支援卡片別名
-      await userService.startCardBindingWithNickname(user.student_id, addFormData.nickname || undefined)
+      await userService.startCardBindingWithNickname(addFormData.userId, addFormData.nickname || undefined)
 
       // 開啟 Dialog（不跳轉）
       setIsAddFormOpen(false)
@@ -404,7 +447,7 @@ export const CardsPage: React.FC = () => {
       setBindingStatus('binding')
       setBindingStep(0)
       setBindingCountdown(90)
-      setBindingMessage('請在 90 秒內刷卡兩次...')
+      setBindingMessage('請在 90 秒內刷卡兩次。綁定期間既有有效卡仍可正常通行。')
 
       // 啟動輪詢
       startBindingPolling(user.student_id)
@@ -531,89 +574,12 @@ export const CardsPage: React.FC = () => {
               <Button
                 className="gap-2 flex-shrink-0 h-[34px] px-4"
                 onClick={handleAdd}
-                style={{ backgroundColor: '#046DFF' }}
               >
                 <Plus className="w-4 h-4" />
                 新增卡片
               </Button>
             </div>
           </div>
-
-          {/* 新增卡片展開式表單 */}
-          {isAddFormOpen && (
-            <div className="border-t border-b border-gray-200 bg-gray-50 px-6 py-6 mt-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-text-primary mb-2">
-                    選擇使用者 <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={addFormData.userId}
-                    onChange={(e) => setAddFormData({ ...addFormData, userId: e.target.value })}
-                    className="flex h-10 w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-                  >
-                    <option value="">請選擇使用者</option>
-                    {users.map(user => (
-                      <option key={user.id} value={user.id}>
-                        {user.name} ({user.student_id})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-text-primary mb-2">
-                    卡片 ID <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    value={addFormData.rfidUid}
-                    onChange={(e) => setAddFormData({ ...addFormData, rfidUid: e.target.value })}
-                    placeholder="請輸入卡片 ID"
-                    className="font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-text-primary mb-2">
-                    別名
-                  </label>
-                  <Input
-                    value={addFormData.nickname}
-                    onChange={(e) => setAddFormData({ ...addFormData, nickname: e.target.value })}
-                    placeholder="例如：學生證、悠遊卡"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                <Button
-                  variant="secondary"
-                  onClick={handleStartBinding}
-                  disabled={addSaving}
-                  className="gap-2"
-                >
-                  <QrCode className="w-4 h-4" />
-                  使用綁定模式
-                </Button>
-
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="secondary"
-                    onClick={handleCancelAdd}
-                    disabled={addSaving}
-                  >
-                    取消
-                  </Button>
-                  <Button
-                    onClick={handleAddCard}
-                    disabled={addSaving}
-                  >
-                    {addSaving ? '新增中...' : '新增'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* 批量操作欄 */}
           {selectedIds.size > 0 && (
@@ -933,6 +899,190 @@ export const CardsPage: React.FC = () => {
         </CardContent>
       </UICard>
 
+      <Dialog
+        open={isAddFormOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setIsAddFormOpen(true)
+            return
+          }
+          if (!addSaving) {
+            handleCancelAdd()
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl" bottomStickOnMobile={false}>
+          <DialogHeader>
+            <DialogTitle>新增卡片</DialogTitle>
+            <DialogDescription>
+              使用 COSS 風格流程新增卡片。你可以直接手動輸入系統卡號，或貼上 iOS NFC Tools 的 Tag detail / Serial number 來匯入。
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form
+            className="contents"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void handleAddCard()
+            }}
+          >
+            <DialogBody>
+              <div className="space-y-6">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Button
+                    type="button"
+                    variant={addInputMode === 'manual' ? 'default' : 'outline'}
+                    className="h-auto min-h-24 items-start justify-start whitespace-normal px-4 py-4 text-left"
+                    onClick={() => handleAddInputModeChange('manual')}
+                  >
+                    <div className="space-y-1">
+                      <div className="font-semibold">手動輸入卡片 ID</div>
+                      <p className="text-sm text-current/80">
+                        適合已知系統卡號，直接建立卡片資料。
+                      </p>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={addInputMode === 'ios' ? 'default' : 'outline'}
+                    className="h-auto min-h-24 items-start justify-start whitespace-normal px-4 py-4 text-left"
+                    onClick={() => handleAddInputModeChange('ios')}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <Import className="size-4" />
+                        從 iOS NFC Tools 匯入
+                      </div>
+                      <p className="text-sm text-current/80">
+                        接受完整 Tag detail 或單獨 Serial number，會自動轉成系統卡號。
+                      </p>
+                    </div>
+                  </Button>
+                </div>
+
+                {addErrorMessage && (
+                  <div className="rounded-xl border border-destructive/24 bg-destructive/6 px-4 py-3 text-sm text-destructive">
+                    {addErrorMessage}
+                  </div>
+                )}
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field className="w-full">
+                    <FieldLabel>選擇使用者</FieldLabel>
+                    <div className="relative inline-flex w-full rounded-lg border border-input bg-background text-sm text-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)]">
+                      <select
+                        value={addFormData.userId}
+                        onChange={(event) => {
+                          setAddErrorMessage(null)
+                          setAddFormData({ ...addFormData, userId: event.target.value })
+                        }}
+                        className="h-9 w-full rounded-[inherit] bg-transparent px-[calc(--spacing(3)-1px)] outline-none sm:h-8 sm:text-sm"
+                      >
+                        <option value="">請選擇使用者</option>
+                        {users.map(user => (
+                          <option key={user.id} value={user.id}>
+                            {user.name} ({user.student_id})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <FieldDescription>卡片會直接綁定到這位使用者名下。</FieldDescription>
+                  </Field>
+
+                  <Field className="w-full">
+                    <FieldLabel>卡片別名</FieldLabel>
+                    <Input
+                      value={addFormData.nickname}
+                      onChange={(event) => {
+                        setAddErrorMessage(null)
+                        setAddFormData({ ...addFormData, nickname: event.target.value })
+                      }}
+                      placeholder="例如：學生證、備用卡、Tesla 卡片"
+                    />
+                    <FieldDescription>可選填，方便在後台辨識卡片用途。</FieldDescription>
+                  </Field>
+                </div>
+
+                {addInputMode === 'manual' ? (
+                  <Field className="w-full">
+                    <FieldLabel>卡片 ID</FieldLabel>
+                    <Input
+                      value={addFormData.rfidUid}
+                      onChange={(event) => {
+                        setAddErrorMessage(null)
+                        setAddFormData({
+                          ...addFormData,
+                          rfidUid: event.target.value,
+                          iosScanText: '',
+                        })
+                      }}
+                      placeholder="請輸入完整系統卡號"
+                      className="font-mono"
+                    />
+                    <FieldDescription>
+                      直接輸入系統使用的十進位卡號；如果你只有 iPhone 掃描結果，請切換到 iOS 匯入模式。
+                    </FieldDescription>
+                  </Field>
+                ) : (
+                  <Field className="w-full">
+                    <FieldLabel>iOS NFC Tools 掃描結果</FieldLabel>
+                    <Textarea
+                      value={addFormData.iosScanText}
+                      onChange={(event) => {
+                        setAddErrorMessage(null)
+                        setAddFormData({
+                          ...addFormData,
+                          iosScanText: event.target.value,
+                          rfidUid: '',
+                        })
+                      }}
+                      placeholder={`貼上 Tag detail 全文，或只貼 Serial number\n例如：\nSerial number\nF2:F1:51:14`}
+                      rows={7}
+                      className="font-mono text-sm"
+                    />
+                    <FieldDescription>
+                      目前只支援 4-byte 的 iOS Serial number。系統會自動做 byte 反轉並轉成 10 碼十進位卡號。
+                    </FieldDescription>
+                  </Field>
+                )}
+
+                <div className="rounded-2xl border border-accent/12 bg-accent/6 px-4 py-4 text-sm text-foreground">
+                  <div className="font-medium">綁定模式說明</div>
+                  <p className="mt-1 text-text-secondary">
+                    如果你手上還沒有卡號，也可以改用綁定模式。綁定期間既有有效卡仍可正常通行，不會再把整個門禁流程卡住。
+                  </p>
+                </div>
+              </div>
+            </DialogBody>
+
+            <DialogFooter className="sm:flex-col sm:items-stretch lg:flex-row lg:items-center">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleCancelAdd}
+                disabled={addSaving}
+              >
+                取消
+              </Button>
+              {addInputMode === 'manual' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleStartBinding}
+                  disabled={addSaving}
+                >
+                  <QrCode className="size-4" />
+                  使用綁定模式
+                </Button>
+              )}
+              <Button type="submit" loading={addSaving}>
+                建立卡片
+              </Button>
+            </DialogFooter>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
       {/* 綁定模式 Dialog */}
       <Dialog open={isBindingDialogOpen} onOpenChange={handleBindingDialogClose}>
         <DialogContent className="sm:max-w-sm">
@@ -961,8 +1111,10 @@ export const CardsPage: React.FC = () => {
 
               {/* 狀態訊息 */}
               {bindingStatus === 'binding' && (
-                <p className="text-sm text-text-secondary">
-                  請將卡片靠近讀卡機
+                <p className="text-center text-sm text-text-secondary">
+                  請將新卡靠近讀卡機兩次。
+                  <br />
+                  綁定期間既有有效卡仍可正常通行。
                 </p>
               )}
 

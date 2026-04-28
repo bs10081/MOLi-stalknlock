@@ -7,6 +7,7 @@ export interface BindingStatus {
   initial_count?: number
   step?: number
   status_message?: string
+  last_status?: string
 }
 
 export const cardBindingService = {

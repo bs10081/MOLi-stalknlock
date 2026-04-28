@@ -1,10 +1,12 @@
 import time
 import logging
 import atexit
+import threading
 
 from app.config import LOCK_PIN, LOCK_ACTIVE_LEVEL, LOCK_DURATION
 
 log = logging.getLogger(__name__)
+LOCK_OPERATION_GUARD = threading.Lock()
 
 # GPIO initialization
 GPIO = None
@@ -47,21 +49,22 @@ atexit.register(cleanup_gpio)
 
 def open_lock():
     """Unlock the door for specified duration"""
-    log.info(f"🔓 Unlocking door for {LOCK_DURATION} seconds")
-    
-    if GPIO_AVAILABLE:
-        # Calculate trigger level
-        active = GPIO.LOW if LOCK_ACTIVE_LEVEL == 0 else GPIO.HIGH
-        inactive = GPIO.HIGH if LOCK_ACTIVE_LEVEL == 0 else GPIO.LOW
-        
-        # Trigger relay
-        GPIO.output(LOCK_PIN, active)
-        time.sleep(LOCK_DURATION)
-        GPIO.output(LOCK_PIN, inactive)
-        log.info("🔒 Door locked")
-    else:
-        log.info(f"(Simulating unlock for {LOCK_DURATION} seconds...)")
-        time.sleep(LOCK_DURATION)
+    with LOCK_OPERATION_GUARD:
+        log.info(f"🔓 Unlocking door for {LOCK_DURATION} seconds")
+
+        if GPIO_AVAILABLE:
+            # Calculate trigger level
+            active = GPIO.LOW if LOCK_ACTIVE_LEVEL == 0 else GPIO.HIGH
+            inactive = GPIO.HIGH if LOCK_ACTIVE_LEVEL == 0 else GPIO.LOW
+
+            # Trigger relay
+            GPIO.output(LOCK_PIN, active)
+            time.sleep(LOCK_DURATION)
+            GPIO.output(LOCK_PIN, inactive)
+            log.info("🔒 Door locked")
+        else:
+            log.info(f"(Simulating unlock for {LOCK_DURATION} seconds...)")
+            time.sleep(LOCK_DURATION)
 
 def deny_access():
     """Log access denial"""

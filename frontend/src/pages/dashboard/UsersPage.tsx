@@ -119,7 +119,7 @@ export const UsersPage: React.FC = () => {
 
       // 開始輪詢
       setRegisterStatus('binding')
-      setRegisterMessage('請在 90 秒內刷卡兩次...')
+      setRegisterMessage('請在 90 秒內刷卡兩次。綁定期間既有有效卡仍可正常通行。')
       startRegisterPolling(registerFormData.studentId)
     } catch (err: any) {
       console.error('Failed to submit registration:', err)
@@ -385,6 +385,11 @@ export const UsersPage: React.FC = () => {
                 </div>
 
                 <p className="text-text-secondary">{registerMessage}</p>
+                {registerStatus === 'binding' && (
+                  <p className="text-xs text-text-secondary">
+                    這次只會把尚未綁定的新卡拿來完成流程；其他已存在的有效卡片仍會照常開門。
+                  </p>
+                )}
 
                 {registerStatus === 'success' && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4">

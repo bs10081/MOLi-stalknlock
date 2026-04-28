@@ -4,10 +4,42 @@
 """
 from typing import Optional
 from fastapi import Cookie, HTTPException
+from app.database import SessionLocal, Admin
 from app.services.auth import verify_access_token
 import logging
 
 log = logging.getLogger(__name__)
+
+def _resolve_admin(admin_token: Optional[str]) -> Optional[dict]:
+    """Resolve the current admin from the JWT and database state."""
+    if not admin_token:
+        return None
+
+    payload = verify_access_token(admin_token)
+    if not payload:
+        return None
+
+    admin_id = payload.get("id")
+    if not admin_id:
+        return None
+
+    with SessionLocal() as db:
+        admin = db.query(Admin).filter(Admin.id == admin_id).first()
+        if not admin:
+            return None
+
+        return {
+            "id": admin.id,
+            "username": admin.username,
+            "name": admin.name,
+            "sub": admin.username,
+        }
+
+
+def get_optional_admin(admin_token: Optional[str] = Cookie(None, alias="admin_token")) -> Optional[dict]:
+    """Return the current admin if the token is valid and the admin still exists."""
+    return _resolve_admin(admin_token)
+
 
 def get_current_admin(admin_token: Optional[str] = Cookie(None, alias="admin_token")) -> dict:
     """
@@ -46,9 +78,9 @@ def get_current_admin(admin_token: Optional[str] = Cookie(None, alias="admin_tok
         log.warning("⚠️ Unauthorized access attempt: No admin token provided")
         raise HTTPException(status_code=401, detail="未授權：請先登入")
 
-    admin = verify_access_token(admin_token)
+    admin = _resolve_admin(admin_token)
     if not admin:
-        log.warning("⚠️ Unauthorized access attempt: Invalid or expired token")
+        log.warning("⚠️ Unauthorized access attempt: Invalid token or admin no longer exists")
         raise HTTPException(status_code=401, detail="登入已過期或憑證無效")
 
     return admin
