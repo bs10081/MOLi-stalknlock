@@ -13,6 +13,10 @@ venv/
 env/
 ENV/
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # Database (will be mounted as volume)
 *.db
 *.sqlite
@@ -42,3 +46,6 @@ docker-compose.yml
 
 # Documentation
 README.md
+
+# Tests
+tests/

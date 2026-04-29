@@ -1,0 +1,231 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, time
+
+from sqlalchemy.orm import Session
+
+from app.database import DoorControlSettings
+from app.services.gpio_control import force_lock, get_lock_runtime_status, hold_unlock
+from app.timezone import app_time_to_utc_naive, now_app_timezone, serialize_datetime
+
+MODE_NORMAL = "normal"
+MODE_ALWAYS_LOCKED = "always_locked"
+MODE_FIRST_SCAN_HOLD = "first_scan_hold"
+
+SCHEDULE_PHASE_INACTIVE = "inactive"
+SCHEDULE_PHASE_LOCKED_WINDOW = "locked_window"
+SCHEDULE_PHASE_WAITING_FOR_FIRST_SCAN = "waiting_for_first_scan"
+SCHEDULE_PHASE_HELD_OPEN = "held_open"
+
+DEFAULT_DAILY_LOCK_TIME = "22:00"
+DEFAULT_FIRST_UNLOCK_TIME = "09:00"
+
+
+@dataclass(frozen=True)
+class ScheduleEvaluation:
+    phase: str
+    now_local: datetime
+    today: str
+    should_clear_hold: bool
+
+
+def parse_time_value(value: str | None) -> time | None:
+    if value is None:
+        return None
+
+    normalized = value.strip()
+    if not normalized:
+        return None
+
+    parts = normalized.split(":")
+    if len(parts) != 2:
+        raise ValueError("時間格式需為 HH:MM")
+
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+    except ValueError as exc:
+        raise ValueError("時間格式需為 HH:MM") from exc
+
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError("時間格式需為 HH:MM")
+
+    return time(hour=hour, minute=minute)
+
+
+def normalize_time_value(value: str | None) -> str | None:
+    parsed = parse_time_value(value)
+    return parsed.strftime("%H:%M") if parsed else None
+
+
+def validate_schedule_config(daily_lock_time: str | None, first_unlock_time: str | None) -> tuple[str, str]:
+    normalized_daily_lock_time = normalize_time_value(daily_lock_time) or DEFAULT_DAILY_LOCK_TIME
+    normalized_first_unlock_time = normalize_time_value(first_unlock_time) or DEFAULT_FIRST_UNLOCK_TIME
+
+    first_unlock = parse_time_value(normalized_first_unlock_time)
+    daily_lock = parse_time_value(normalized_daily_lock_time)
+
+    if first_unlock is None or daily_lock is None:
+        raise ValueError("請同時設定每日上鎖時間與首刷常開時間")
+
+    if first_unlock >= daily_lock:
+        raise ValueError("首刷常開時間必須早於每日上鎖時間")
+
+    return normalized_daily_lock_time, normalized_first_unlock_time
+
+
+def get_or_create_door_settings(db: Session) -> DoorControlSettings:
+    settings = db.query(DoorControlSettings).first()
+    if settings:
+        if not settings.daily_lock_time:
+            settings.daily_lock_time = DEFAULT_DAILY_LOCK_TIME
+        if not settings.first_unlock_time:
+            settings.first_unlock_time = DEFAULT_FIRST_UNLOCK_TIME
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+        return settings
+
+    settings = DoorControlSettings(
+        id=1,
+        access_mode=MODE_NORMAL,
+        daily_lock_time=DEFAULT_DAILY_LOCK_TIME,
+        first_unlock_time=DEFAULT_FIRST_UNLOCK_TIME,
+    )
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
+def clear_schedule_hold(settings: DoorControlSettings) -> None:
+    settings.schedule_hold_date = None
+    settings.schedule_hold_started_at = None
+
+
+def evaluate_schedule(
+    settings: DoorControlSettings,
+    now_local: datetime | None = None,
+) -> ScheduleEvaluation:
+    now_local = now_local or now_app_timezone()
+    today = now_local.date().isoformat()
+
+    if settings.access_mode != MODE_FIRST_SCAN_HOLD:
+        return ScheduleEvaluation(
+            phase=SCHEDULE_PHASE_INACTIVE,
+            now_local=now_local,
+            today=today,
+            should_clear_hold=bool(settings.schedule_hold_date or settings.schedule_hold_started_at),
+        )
+
+    daily_lock_time, first_unlock_time = validate_schedule_config(
+        settings.daily_lock_time,
+        settings.first_unlock_time,
+    )
+
+    current_time = now_local.time().replace(second=0, microsecond=0)
+    daily_lock = parse_time_value(daily_lock_time)
+    first_unlock = parse_time_value(first_unlock_time)
+
+    in_locked_window = current_time >= daily_lock or current_time < first_unlock
+    hold_is_active = settings.schedule_hold_date == today and not in_locked_window
+    should_clear_hold = bool(settings.schedule_hold_date or settings.schedule_hold_started_at) and not hold_is_active
+
+    if in_locked_window:
+        phase = SCHEDULE_PHASE_LOCKED_WINDOW
+    elif hold_is_active:
+        phase = SCHEDULE_PHASE_HELD_OPEN
+    else:
+        phase = SCHEDULE_PHASE_WAITING_FOR_FIRST_SCAN
+
+    return ScheduleEvaluation(
+        phase=phase,
+        now_local=now_local,
+        today=today,
+        should_clear_hold=should_clear_hold,
+    )
+
+
+def activate_schedule_hold(
+    db: Session,
+    settings: DoorControlSettings | None = None,
+    now_local: datetime | None = None,
+) -> ScheduleEvaluation:
+    settings = settings or get_or_create_door_settings(db)
+    now_local = now_local or now_app_timezone()
+
+    settings.schedule_hold_date = now_local.date().isoformat()
+    settings.schedule_hold_started_at = app_time_to_utc_naive(now_local)
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+
+    hold_unlock()
+    return evaluate_schedule(settings, now_local)
+
+
+def sync_door_hardware_state(
+    db: Session,
+    *,
+    interrupt_timed_unlock: bool = False,
+) -> tuple[DoorControlSettings, ScheduleEvaluation, dict[str, bool | str | None]]:
+    settings = get_or_create_door_settings(db)
+    evaluation = evaluate_schedule(settings)
+    runtime = get_lock_runtime_status()
+
+    mutated = False
+    hardware_action = None
+    current_door_state = runtime["door_state"]
+
+    if evaluation.should_clear_hold:
+        clear_schedule_hold(settings)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+        settings = settings
+        evaluation = evaluate_schedule(settings, evaluation.now_local)
+        mutated = True
+
+    should_force_lock = False
+    should_hold_open = False
+
+    if settings.access_mode == MODE_ALWAYS_LOCKED:
+        should_force_lock = True
+    elif settings.access_mode == MODE_FIRST_SCAN_HOLD:
+        if evaluation.phase == SCHEDULE_PHASE_HELD_OPEN:
+            should_hold_open = True
+        else:
+            should_force_lock = True
+    else:
+        should_force_lock = current_door_state == "held_open"
+
+    if should_hold_open and current_door_state != "held_open":
+        hold_unlock()
+        hardware_action = "hold_unlock"
+    elif should_force_lock and (
+        current_door_state == "held_open"
+        or (interrupt_timed_unlock and current_door_state == "unlocking")
+    ):
+        force_lock()
+        hardware_action = "force_lock"
+
+    return settings, evaluation, {
+        "mutated": mutated,
+        "hardware_action": hardware_action,
+    }
+
+
+def serialize_door_settings(
+    settings: DoorControlSettings,
+    evaluation: ScheduleEvaluation | None = None,
+) -> dict[str, str | None]:
+    evaluation = evaluation or evaluate_schedule(settings)
+    return {
+        "access_mode": settings.access_mode,
+        "schedule_lock_time": settings.daily_lock_time or DEFAULT_DAILY_LOCK_TIME,
+        "schedule_first_unlock_time": settings.first_unlock_time or DEFAULT_FIRST_UNLOCK_TIME,
+        "schedule_phase": evaluation.phase,
+        "schedule_hold_date": settings.schedule_hold_date,
+        "schedule_hold_started_at": serialize_datetime(settings.schedule_hold_started_at),
+    }

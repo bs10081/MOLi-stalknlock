@@ -24,20 +24,20 @@ export const EditPanel: React.FC<EditPanelProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`bg-gray-50 border-b border-gray-200 ${className}`}>
-      <div className="px-6 py-4">
+    <div className={`border-t border-border/60 bg-muted/48 ${className}`}>
+      <div className="px-6 py-5">
         {/* 表單欄位區域 */}
-        <div className="mb-4">
+        <div className="mb-5">
           {children}
         </div>
 
         {/* 底部操作區 */}
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+        <div className="flex flex-col gap-4 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
           {/* 左側：刪除按鈕 */}
           <div>
             {onDelete && (
               <Button
-                variant="danger"
+                variant="destructive"
                 onClick={onDelete}
                 disabled={saving || deleting}
                 className="gap-2"
@@ -49,9 +49,9 @@ export const EditPanel: React.FC<EditPanelProps> = ({
           </div>
 
           {/* 右側：取消 + 儲存按鈕 */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 self-end">
             <Button
-              variant="secondary"
+              variant="outline"
               onClick={onCancel}
               disabled={saving || deleting}
             >

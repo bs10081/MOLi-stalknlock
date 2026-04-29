@@ -8,9 +8,16 @@ from app.routers.dependencies import get_current_admin
 from app.services.telegram import send_telegram
 from app.services.rfid_reader import rfid_reader
 from app.config import DEV_MODE
+from app.versioning import get_build_info
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["api"])
+
+
+@router.get("/version")
+async def api_version():
+    """Return the runtime application version and build metadata."""
+    return get_build_info()
 
 @router.post("/scan")
 async def api_scan(

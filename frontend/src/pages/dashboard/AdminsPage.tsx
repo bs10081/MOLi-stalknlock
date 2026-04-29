@@ -10,6 +10,7 @@ import { adminService } from '@/services/adminService'
 import { authService } from '@/services/authService'
 import { ADMIN_PROFILE_UPDATED_EVENT } from '@/lib/adminProfileEvents'
 import type { Admin } from '@/types'
+import { formatDate } from '@/lib/dateTime'
 
 interface EditFormData {
   name: string
@@ -246,6 +247,7 @@ export const AdminsPage: React.FC = () => {
     return (
       <div>
         <PageHeader
+          eyebrow="Security"
           title="管理員"
           description="管理系統管理員帳號"
         />
@@ -264,6 +266,7 @@ export const AdminsPage: React.FC = () => {
     return (
       <div>
         <PageHeader
+          eyebrow="Security"
           title="管理員"
           description="管理系統管理員帳號"
         />
@@ -282,6 +285,7 @@ export const AdminsPage: React.FC = () => {
   return (
     <div>
       <PageHeader
+        eyebrow="Security"
         title="管理員"
         description="管理系統管理員帳號"
       />
@@ -393,7 +397,7 @@ export const AdminsPage: React.FC = () => {
                         <TableCell className="font-medium">{admin.username}</TableCell>
                         <TableCell>{admin.name}</TableCell>
                         <TableCell className="text-text-secondary">
-                          {new Date(admin.created_at).toLocaleDateString()}
+                          {formatDate(admin.created_at)}
                         </TableCell>
                         <TableCell className="text-right">
                           <button
@@ -445,7 +449,7 @@ export const AdminsPage: React.FC = () => {
                     </div>
 
                     <div className="text-sm text-text-secondary mt-3">
-                      建立日期：{new Date(admin.created_at).toLocaleDateString()}
+                      建立日期：{formatDate(admin.created_at)}
                     </div>
 
                     <div className="pt-3 mt-3 border-t border-border">

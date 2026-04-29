@@ -47,14 +47,14 @@ export const Checkbox: React.FC<CheckboxProps> = ({
         disabled={disabled}
         onClick={handleChange}
         className={`
-          w-4 h-4 rounded border flex items-center justify-center
+          flex h-4.5 w-4.5 items-center justify-center rounded-md border
           transition-all duration-150 ease-in-out
           focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1
           ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
           ${
             checked || indeterminate
-              ? 'bg-accent border-accent'
-              : 'bg-white border-gray-300 hover:border-gray-400'
+              ? 'border-accent bg-accent shadow-[0_8px_24px_-14px_rgba(35,88,245,0.7)]'
+              : 'border-input bg-white hover:border-accent/60'
           }
         `}
       >

@@ -22,6 +22,7 @@ from app.services.registration import (
 from app.services.telegram import send_telegram
 from app.services.auth import verify_password, create_access_token
 from app.config import COOKIE_SECURE, RATE_LIMIT_PER_MINUTE, RATE_LIMIT_ENABLED
+from app.timezone import utcnow
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["web"])
@@ -255,7 +256,7 @@ async def check_status(
             }
 
         # 檢查是否過期
-        if session.expires_at and session.expires_at < datetime.utcnow():
+        if session.expires_at and session.expires_at < utcnow():
             return {
                 "bound": False,
                 "card_count": current_card_count,

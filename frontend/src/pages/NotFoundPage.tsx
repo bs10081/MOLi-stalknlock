@@ -1,8 +1,9 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 
 interface NotFoundPageProps {
   title?: string
@@ -24,20 +25,18 @@ export const NotFoundPage: React.FC<NotFoundPageProps> = ({
   embedded = false,
 }) => {
   const content = (
-    <Card className="w-full max-w-xl">
-      <CardHeader className="text-center">
-        <p className="text-sm font-medium text-accent">404</p>
-        <CardTitle className="text-2xl font-semibold">{title}</CardTitle>
+    <Card variant="hero" className="w-full max-w-2xl">
+      <CardHeader className="items-center text-center">
+        <Badge variant="info">404</Badge>
+        <CardTitle className="text-3xl font-semibold">{title}</CardTitle>
+        <CardDescription className="max-w-xl text-base">{description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 text-center">
-        <p className="text-sm text-text-secondary">{description}</p>
-
-        <div className="flex flex-col sm:flex-row justify-center gap-3">
+        <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <Link
             to={primaryHref}
             className={cn(
-              'inline-flex items-center justify-center rounded-md font-medium transition-colors',
-              'h-10 px-4 text-base bg-accent text-white hover:bg-[#1d4ed8]'
+              'inline-flex h-10 items-center justify-center rounded-xl border border-primary bg-primary px-4 text-base font-medium text-white transition-colors hover:bg-primary/92',
             )}
           >
             {primaryLabel}
@@ -45,8 +44,7 @@ export const NotFoundPage: React.FC<NotFoundPageProps> = ({
           <Link
             to={secondaryHref}
             className={cn(
-              'inline-flex items-center justify-center rounded-md font-medium transition-colors',
-              'h-10 px-4 text-base bg-bg-primary text-text-primary border border-border hover:bg-gray-100'
+              'inline-flex h-10 items-center justify-center rounded-xl border border-border/70 bg-white/80 px-4 text-base font-medium text-text-primary transition-colors hover:bg-muted/60',
             )}
           >
             {secondaryLabel}
@@ -57,12 +55,8 @@ export const NotFoundPage: React.FC<NotFoundPageProps> = ({
   )
 
   if (embedded) {
-    return <div className="flex items-center justify-center min-h-[50vh] px-4">{content}</div>
+    return <div className="flex min-h-[50vh] items-center justify-center px-4">{content}</div>
   }
 
-  return (
-    <PageWrapper showHeader={false} showFooter={false}>
-      {content}
-    </PageWrapper>
-  )
+  return <PageWrapper>{content}</PageWrapper>
 }

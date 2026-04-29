@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { authService } from '@/services/authService'
 
@@ -28,11 +28,15 @@ export const ProtectedRoute: React.FC = () => {
 
   if (status === 'checking') {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center px-6">
+      <div className="flex min-h-screen items-center justify-center px-6">
         <Card className="w-full max-w-md">
-          <CardContent className="py-10 text-center">
-            <Spinner className="mx-auto mb-4" />
-            <p className="text-sm text-text-secondary">正在驗證管理員登入狀態...</p>
+          <CardHeader className="items-center text-center">
+            <Spinner className="mb-2" />
+            <CardTitle className="text-2xl">正在驗證登入狀態</CardTitle>
+            <CardDescription>我們正在確認這個管理工作階段是否仍然有效。</CardDescription>
+          </CardHeader>
+          <CardContent className="pb-8 text-center text-sm text-text-secondary">
+            成功後會直接進入對應的後台頁面。
           </CardContent>
         </Card>
       </div>

@@ -1,0 +1,62 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="90" y1="80" x2="1110" y2="550" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FBFF"/>
+      <stop offset="0.54" stop-color="#E7F0FF"/>
+      <stop offset="1" stop-color="#DDE8FF"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="120" y1="120" x2="1080" y2="510" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.96"/>
+      <stop offset="1" stop-color="#F4F7FF" stop-opacity="0.94"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" rx="40" fill="url(#bg)"/>
+  <rect x="70" y="70" width="1060" height="490" rx="36" fill="url(#panel)" stroke="#D9E4FF"/>
+
+  <rect x="120" y="120" width="110" height="110" rx="30" fill="#2358F5"/>
+  <path d="M145 198V152H156.4L173.5 179.5L190.7 152H201V198H190.3V170.9L176.1 193.5H169.9L155.7 170.9V198H145Z" fill="white"/>
+
+  <text x="270" y="160" fill="#2358F5" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" letter-spacing="3.6">
+    ADMIN ACCESS SYSTEM
+  </text>
+  <text x="270" y="232" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="700">
+    Makers' Open Lab for Innovation
+  </text>
+  <text x="270" y="288" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="500">
+    RFID door access, card binding, audit logs, and remote unlock.
+  </text>
+
+  <rect x="120" y="352" width="308" height="132" rx="28" fill="white" stroke="#D9E4FF"/>
+  <text x="156" y="392" fill="#64748B" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" letter-spacing="2.4">
+    CONTROL SURFACES
+  </text>
+  <text x="156" y="438" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700">
+    Users, Cards, Logs
+  </text>
+  <text x="156" y="474" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="500">
+    Unified COSS-style management console
+  </text>
+
+  <rect x="454" y="352" width="272" height="132" rx="28" fill="white" stroke="#D9E4FF"/>
+  <text x="490" y="392" fill="#64748B" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" letter-spacing="2.4">
+    DEVICE STATUS
+  </text>
+  <text x="490" y="438" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700">
+    Runtime + Audit
+  </text>
+  <text x="490" y="474" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="500">
+    Door state, events, diagnostics
+  </text>
+
+  <rect x="752" y="352" width="328" height="132" rx="28" fill="#2358F5"/>
+  <text x="788" y="392" fill="#C9D8FF" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" letter-spacing="2.4">
+    OPERATION FLOW
+  </text>
+  <text x="788" y="438" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700">
+    Bind • Audit • Unlock
+  </text>
+  <text x="788" y="474" fill="#E7EEFF" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="500">
+    Login-aware routing and preview metadata
+  </text>
+</svg>

@@ -66,12 +66,42 @@ cd frontend && npm install && npm run dev
 ### Docker 部署
 
 ```bash
-# 建置 ARM64 映像
+# 本地手動建置並推送 ARM64 映像
 docker buildx build --platform linux/arm64 -t bs10081/moli-door:dev --push .
 
-# 樹莓派部署
+# 樹莓派首次部署 / 手動更新
 ssh moli-door "cd /home/pi/Host/MOLi-stalknlock && docker compose pull && docker compose up -d"
 ```
+
+### 自動化部署（GitHub Actions + Watchtower）
+
+repo 內已提供 GitHub Actions workflow：
+
+- Pull Request / Push：先驗證 Python 測試與前端 build
+- Push 到 `main` / `v*` tag / `workflow_dispatch`：自動建置 `linux/arm64` image，推送到 Docker Hub
+
+請先在 GitHub repository secrets 中設定：
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+
+推送策略：
+
+- `main` 會更新 `bs10081/moli-door:dev` 與 `bs10081/moli-door:latest`
+- Git tag（例如 `v2.1.0`）會額外推送對應版本 tag
+- 每次 publish 都會再附上一個 `sha-*` tag 方便追蹤
+
+### Watchtower
+
+`docker-compose.yml` 已內建 `watchtower` 服務，會只監看帶有 `com.centurylinklabs.watchtower.enable=true` 的 `moli-door` 容器，並依 `WATCHTOWER_POLL_INTERVAL` 定時檢查新 image。由於原始 `containrrr/watchtower` 專案已停止維護，這裡預設改用 `nickfedor/watchtower`。
+
+首次在樹莓派啟用：
+
+```bash
+ssh moli-door "cd /home/pi/Host/MOLi-stalknlock && docker compose pull && docker compose up -d"
+```
+
+之後只要 GitHub Actions 推出新的 Docker Hub image，Watchtower 就會自動拉取並重啟 `moli-door`。
 
 ## 專案結構
 
@@ -132,6 +162,11 @@ COOKIE_SECURE=false
 ```bash
 # 開發模式
 DEV_MODE=false
+
+# Docker Compose / Watchtower
+DOCKER_IMAGE=bs10081/moli-door:dev
+WATCHTOWER_POLL_INTERVAL=300
+WATCHTOWER_IMAGE=nickfedor/watchtower:latest
 
 # 資料庫
 DATABASE_URL=sqlite:///./data/moli_door.db

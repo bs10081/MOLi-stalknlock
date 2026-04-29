@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
+import { RouteMeta } from './components/meta/RouteMeta'
 import { LoginPage } from './pages/LoginPage'
 import { HomePage } from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -16,6 +17,7 @@ import { SettingsPage } from './pages/dashboard/SettingsPage'
 function App() {
   return (
     <Router basename="/admin">
+      <RouteMeta />
       <Routes>
         {/* 公開頁面 */}
         <Route path="/" element={<HomePage />} />

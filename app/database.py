@@ -60,6 +60,29 @@ class AccessLog(Base):
     action = Column(String(10))
     timestamp = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
+class DoorEvent(Base):
+    __tablename__ = "door_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    admin_id = Column(String(36), nullable=True)
+    admin_name = Column(String(50), nullable=False)
+    action = Column(String(50), nullable=False)
+    source = Column(String(50), nullable=False)
+    result = Column(String(20), nullable=False)
+    description = Column(String(255), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+class DoorControlSettings(Base):
+    __tablename__ = "door_control_settings"
+
+    id = Column(Integer, primary_key=True, default=1)
+    access_mode = Column(String(20), nullable=False, default="normal")
+    daily_lock_time = Column(String(5), nullable=True)
+    first_unlock_time = Column(String(5), nullable=True)
+    schedule_hold_date = Column(String(10), nullable=True)
+    schedule_hold_started_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
 class RegistrationSession(Base):
     __tablename__ = "registration_sessions"
 

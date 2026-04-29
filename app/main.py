@@ -17,10 +17,20 @@ from slowapi.errors import RateLimitExceeded
 from app.routers import api, web, admin
 from app.routers.dependencies import get_current_admin
 
-from app.database import init_db, get_db, SessionLocal, User, Card, AccessLog
+from app.database import init_db, get_db, SessionLocal, User, Card, AccessLog, DoorEvent
+from app.versioning import get_app_version, get_build_info
 
 from app.services.rfid_reader import rfid_reader
 from app.services.gpio_control import open_lock, deny_access
+from app.services.door_mode import (
+    MODE_ALWAYS_LOCKED,
+    MODE_FIRST_SCAN_HOLD,
+    SCHEDULE_PHASE_HELD_OPEN,
+    SCHEDULE_PHASE_LOCKED_WINDOW,
+    SCHEDULE_PHASE_WAITING_FOR_FIRST_SCAN,
+    activate_schedule_hold,
+    sync_door_hardware_state,
+)
 from app.services.registration import (
     get_active_registration_sessions,
     REGISTRATION_STATUS_CARD_MISMATCH_RESET,
@@ -38,6 +48,43 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 log = logging.getLogger(__name__)
+
+
+async def door_mode_heartbeat():
+    """Continuously enforce persisted door-control settings such as daily auto-lock."""
+    while True:
+        try:
+            with SessionLocal() as db:
+                settings, evaluation, sync_result = sync_door_hardware_state(db)
+                hardware_action = sync_result.get("hardware_action")
+
+                if hardware_action == "force_lock":
+                    if settings.access_mode == MODE_ALWAYS_LOCKED:
+                        db.add(DoorEvent(
+                            admin_id=None,
+                            admin_name="系統自動化",
+                            action="always_locked_enforced",
+                            source="door_scheduler",
+                            result="accepted",
+                            description="門禁維持在永久上鎖模式。",
+                        ))
+                        db.commit()
+                    elif settings.access_mode == MODE_FIRST_SCAN_HOLD and evaluation.phase == SCHEDULE_PHASE_LOCKED_WINDOW:
+                        db.add(DoorEvent(
+                            admin_id=None,
+                            admin_name="系統自動化",
+                            action="schedule_auto_lock",
+                            source="door_scheduler",
+                            result="accepted",
+                            description=f"已到每日上鎖時間，門禁恢復上鎖（{settings.daily_lock_time}）。",
+                        ))
+                        db.commit()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.error(f"❌ Door mode heartbeat failed: {exc}", exc_info=True)
+
+        await asyncio.sleep(15)
 
 async def handle_rfid_scan(card_uid: str):
     """Handle an RFID scan without allowing active binding flows to hijack normal access."""
@@ -93,7 +140,36 @@ async def handle_normal_mode(card_uid: str, db: Session, card: Optional[Card] = 
     card_info = f" ({card.nickname})" if card.nickname else ""
     log.info(f"✅ Access granted: {user_name} ({student_id}){card_info}")
 
-    asyncio.create_task(asyncio.to_thread(open_lock))
+    settings, schedule_evaluation, _ = sync_door_hardware_state(db)
+    access_note = ""
+
+    if settings.access_mode == MODE_ALWAYS_LOCKED:
+        log.warning(f"⚠️ Access denied by always-locked mode: {user_name} ({student_id})")
+        deny_access()
+        return
+
+    if settings.access_mode == MODE_FIRST_SCAN_HOLD:
+        if schedule_evaluation.phase == SCHEDULE_PHASE_LOCKED_WINDOW:
+            log.warning(f"⚠️ Access denied during scheduled locked window: {user_name} ({student_id})")
+            deny_access()
+            return
+
+        if schedule_evaluation.phase == SCHEDULE_PHASE_WAITING_FOR_FIRST_SCAN:
+            activate_schedule_hold(db, settings)
+            access_note = f"，已切換為今日常開，預計 {settings.daily_lock_time} 自動上鎖"
+            db.add(DoorEvent(
+                admin_id=None,
+                admin_name=user_name,
+                action="schedule_hold_open",
+                source="rfid_access",
+                result="accepted",
+                description=f"{user_name} 首次刷卡後，門禁維持解鎖直到 {settings.daily_lock_time}。",
+            ))
+            db.commit()
+        elif schedule_evaluation.phase == SCHEDULE_PHASE_HELD_OPEN:
+            access_note = f"，目前維持常開至 {settings.daily_lock_time}"
+    else:
+        asyncio.create_task(asyncio.to_thread(open_lock))
 
     async def background_tasks():
         with SessionLocal() as background_db:
@@ -109,7 +185,7 @@ async def handle_normal_mode(card_uid: str, db: Session, card: Optional[Card] = 
                 background_db.rollback()
                 log.error(f"Failed to log access: {exc}")
 
-        message = f"歡迎！{user_name} ({student_id}) 解鎖門禁{card_info}"
+        message = f"歡迎！{user_name} ({student_id}) 通過門禁{card_info}{access_note}"
         await asyncio.to_thread(send_telegram, message)
 
     asyncio.create_task(background_tasks())
@@ -161,7 +237,9 @@ async def handle_register_mode(card_uid: str, db: Session, session):
         card_count = db.query(Card).filter(Card.user_id == user.id).count()
         log.info(f"🎉 Card bound: {user.student_id} -> {card_uid} (總共 {card_count} 張卡片)")
 
-        asyncio.create_task(asyncio.to_thread(open_lock))
+        settings, schedule_evaluation, _ = sync_door_hardware_state(db)
+        if settings.access_mode != MODE_ALWAYS_LOCKED and schedule_evaluation.phase != SCHEDULE_PHASE_HELD_OPEN:
+            asyncio.create_task(asyncio.to_thread(open_lock))
         asyncio.create_task(asyncio.to_thread(
             send_telegram,
             f"綁定成功：{user.name} ({user.student_id})\n現在有 {card_count} 張卡片"
@@ -178,11 +256,14 @@ async def handle_register_mode(card_uid: str, db: Session, session):
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Startup
-    log.info("🚀 MOLi Door System starting up...")
+    log.info("🚀 Makers' Open Lab for Innovation Door System starting up...")
 
     # Initialize database
     init_db()
     log.info("✅ Database initialized")
+
+    door_mode_task = asyncio.create_task(door_mode_heartbeat())
+    log.info("✅ Door mode heartbeat started")
 
     # Start RFID reader in background
     asyncio.create_task(rfid_reader.read_loop(handle_rfid_scan))
@@ -194,14 +275,20 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     log.info("Shutting down...")
+    door_mode_task.cancel()
+    try:
+        await door_mode_task
+    except asyncio.CancelledError:
+        pass
 
 # Create FastAPI app
 app = FastAPI(
-    title="MOLi Door System",
-    description="FastAPI-based door access control system with web UI",
-    version="2.0.0",
+    title="Makers' Open Lab for Innovation Door Access System",
+    description="FastAPI-based door access control system for Makers' Open Lab for Innovation",
+    version=get_app_version(),
     lifespan=lifespan
 )
+app.state.build_info = get_build_info()
 
 # Setup rate limiter
 from app.config import RATE_LIMIT_ENABLED

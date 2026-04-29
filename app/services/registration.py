@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.config import REGISTER_TIMEOUT
 from app.database import Card, RegistrationSession
+from app.timezone import utcnow
 
 REGISTRATION_STATUS_WAITING_FOR_FIRST_SCAN = "waiting_for_first_scan"
 REGISTRATION_STATUS_WAITING_FOR_SECOND_SCAN = "waiting_for_second_scan"
@@ -18,7 +19,7 @@ def get_active_registration_sessions(
 ) -> list[RegistrationSession]:
     """Return all active registration sessions."""
     if now is None:
-        now = datetime.utcnow()
+        now = utcnow()
 
     return db.query(RegistrationSession).filter(
         RegistrationSession.completed.is_(False),
@@ -34,7 +35,7 @@ def get_active_registration_session(
 ) -> Optional[RegistrationSession]:
     """Return the active registration session for a specific user."""
     if now is None:
-        now = datetime.utcnow()
+        now = utcnow()
 
     return db.query(RegistrationSession).filter(
         RegistrationSession.user_id == user_id,
@@ -58,7 +59,7 @@ def start_registration_session(
     means another user already has an active binding flow, and no changes were made.
     """
     if now is None:
-        now = datetime.utcnow()
+        now = utcnow()
 
     conflicting_session = db.query(RegistrationSession).filter(
         RegistrationSession.user_id != user_id,

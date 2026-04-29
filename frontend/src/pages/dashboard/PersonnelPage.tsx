@@ -12,6 +12,7 @@ import { BulkActionBar } from '@/components/ui/bulk-action-bar'
 import { Search, Plus, ChevronRight, CreditCard } from 'lucide-react'
 import { userService } from '@/services/userService'
 import type { User } from '@/types'
+import { formatDate } from '@/lib/dateTime'
 
 interface FormDataType {
   name: string
@@ -321,6 +322,7 @@ export const PersonnelPage: React.FC = () => {
     return (
       <div>
         <PageHeader
+          eyebrow="Directory"
           title="人員"
           description="管理使用者資料與卡片綁定"
         />
@@ -339,6 +341,7 @@ export const PersonnelPage: React.FC = () => {
     return (
       <div>
         <PageHeader
+          eyebrow="Directory"
           title="人員"
           description="管理使用者資料與卡片綁定"
         />
@@ -357,6 +360,7 @@ export const PersonnelPage: React.FC = () => {
   return (
     <div>
       <PageHeader
+        eyebrow="Directory"
         title="人員"
         description="管理使用者資料與卡片綁定"
       />
@@ -528,7 +532,7 @@ export const PersonnelPage: React.FC = () => {
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-text-secondary">
-                          {new Date(user.created_at).toLocaleDateString()}
+                          {formatDate(user.created_at)}
                         </TableCell>
                         <TableCell className="text-right">
                           <button

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { X, ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
+import { X, ArrowLeft, ChevronDown, ChevronRight, PanelLeftClose } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { navigation, type NavItem } from '@/config/navigation'
+import { useAppVersion } from '@/providers/AppVersionProvider'
+import { formatVersionLabel } from '@/lib/version'
 
 interface SidebarProps {
   isOpen: boolean
@@ -12,6 +14,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation()
   const isOnOverview = location.pathname === '/dashboard'
+  const { versionInfo } = useAppVersion()
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
 
   // Auto-expand parent if child is active
@@ -55,55 +58,67 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       {/* Sidebar - 保持 fixed 定位 */}
       <aside
         className={cn(
-          'fixed top-0 left-0 z-50 h-screen w-60 bg-white border-r border-border',
+          'fixed top-0 left-0 z-50 flex h-screen w-72 flex-col border-r border-border/70 bg-white',
           'transform transition-transform duration-200 ease-in-out',
           'lg:translate-x-0',
-          'flex flex-col',
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         {/* Logo/Account Selector */}
-        <div className="h-14 px-4 flex items-center justify-between border-b border-border shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-accent"></span>
-            <span className="font-semibold text-base">MOLi 門禁</span>
+        <div className="shrink-0 border-b border-border/60 px-5 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-text-primary text-sm font-semibold text-white shadow-[0_16px_30px_-20px_rgba(17,17,17,0.38)]">
+                M
+              </span>
+              <div>
+                <p className="font-heading text-sm font-semibold text-text-primary">Makers' Open Lab for Innovation</p>
+                <p className="text-xs text-text-secondary">Door Access System</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-xl p-2 text-text-secondary transition-colors hover:bg-muted lg:hidden"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          {/* Mobile close button */}
-          <button
-            onClick={onClose}
-            className="lg:hidden p-1.5 hover:bg-gray-100 rounded-md transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="mt-4 flex items-center justify-between rounded-2xl border border-border/60 bg-muted/50 px-3 py-2 text-xs text-text-secondary">
+            <span>{formatVersionLabel(versionInfo)}</span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-primary">
+              <PanelLeftClose className="h-3.5 w-3.5" />
+              Admin
+            </span>
+          </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3">
+        <nav className="flex-1 overflow-y-auto px-4 py-5">
           {navigation.map((group, idx) => (
-            <div key={idx} className="mb-6 last:mb-0">
+            <div key={idx} className="mb-7 last:mb-0">
               {/* 第一組（總覽）特殊處理 */}
               {idx === 0 ? (
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {group.items.map((item) => (
                     <NavLink
                       key={item.id}
                       to={item.href}
                       onClick={onClose}
                       className={cn(
-                        'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',
+                        'flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-colors',
                         isOnOverview
-                          ? 'bg-gray-100 text-text-primary font-medium hover:bg-gray-100'
-                          : 'bg-gray-50 text-text-secondary font-normal hover:bg-gray-100'
+                          ? 'bg-text-primary text-white shadow-[0_18px_40px_-28px_rgba(15,23,42,0.8)]'
+                          : 'bg-muted/62 text-text-secondary hover:bg-muted'
                       )}
                     >
                       {isOnOverview ? (
                         <>
-                          <item.icon className="w-5 h-5 shrink-0 text-text-primary" />
+                          <item.icon className="w-5 h-5 shrink-0" />
                           <span>{item.label}</span>
                         </>
                       ) : (
                         <>
-                          <ArrowLeft className="w-5 h-5 shrink-0 text-text-secondary" />
+                          <ArrowLeft className="w-5 h-5 shrink-0" />
                           <span>返回{item.label}</span>
                         </>
                       )}
@@ -113,11 +128,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               ) : (
                 <>
                   {group.title && (
-                    <h3 className="px-3 mb-2 text-xs font-semibold text-text-secondary uppercase tracking-wide">
+                    <h3 className="mb-2 px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
                       {group.title}
                     </h3>
                   )}
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     {group.items.map((item) => (
                       <NavItemWithChildren
                         key={item.id}
@@ -135,10 +150,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-border p-3 shrink-0">
-          <p className="text-xs text-text-secondary text-center">
-            Makers' Open Lab
-          </p>
+        <div className="shrink-0 border-t border-border/60 px-5 py-4">
+          <p className="text-xs font-medium text-text-primary">Makers' Open Lab for Innovation</p>
+          <p className="mt-1 text-xs text-text-secondary">RFID access, card binding, audit logs, remote unlock.</p>
         </div>
       </aside>
     </>
@@ -163,8 +177,7 @@ const NavItemWithChildren: React.FC<NavItemWithChildrenProps> = ({ item, expande
         <button
           onClick={onToggle}
           className={cn(
-            'w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',
-            'hover:bg-gray-50 text-text-secondary font-normal'
+            'flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium text-text-secondary transition-colors hover:bg-muted/62'
           )}
         >
           <Icon className="w-5 h-5 shrink-0 text-text-secondary" />
@@ -181,10 +194,9 @@ const NavItemWithChildren: React.FC<NavItemWithChildrenProps> = ({ item, expande
           onClick={onClose}
           className={({ isActive }) =>
             cn(
-              'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',
-              'hover:bg-gray-50',
+              'flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-colors hover:bg-muted/62',
               isActive
-                ? 'bg-gray-100 text-text-primary font-medium'
+                ? 'bg-white text-text-primary shadow-[0_14px_36px_-28px_rgba(15,23,42,0.45)] ring-1 ring-border/70'
                 : 'text-text-secondary font-normal'
             )
           }
@@ -200,7 +212,7 @@ const NavItemWithChildren: React.FC<NavItemWithChildrenProps> = ({ item, expande
 
       {/* Children Items */}
       {hasChildren && expanded && (
-        <div className="mt-1 ml-3 pl-3 border-l-2 border-gray-200 space-y-1">
+        <div className="mt-2 ml-4 space-y-1 border-l border-border/70 pl-4">
           {item.children!.map((child) => {
             const ChildIcon = child.icon
             return (
@@ -210,10 +222,9 @@ const NavItemWithChildren: React.FC<NavItemWithChildrenProps> = ({ item, expande
                 onClick={onClose}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
-                    'hover:bg-gray-50',
+                    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted/60',
                     isActive
-                      ? 'bg-gray-100 text-text-primary font-normal'
+                      ? 'bg-white text-text-primary shadow-[0_14px_32px_-26px_rgba(15,23,42,0.35)] ring-1 ring-border/70'
                       : 'text-text-secondary font-normal'
                   )
                 }

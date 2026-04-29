@@ -27,6 +27,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { userService } from '@/services/userService'
 import { cardBindingService } from '@/services/cardBindingService'
 import type { Card, User } from '@/types'
+import { formatDate } from '@/lib/dateTime'
 
 interface CardWithUser extends Card {
   user?: User
@@ -498,6 +499,7 @@ export const CardsPage: React.FC = () => {
     return (
       <div>
         <PageHeader
+          eyebrow="Cards"
           title="卡片管理"
           description="管理所有 RFID 卡片"
         />
@@ -516,6 +518,7 @@ export const CardsPage: React.FC = () => {
     return (
       <div>
         <PageHeader
+          eyebrow="Cards"
           title="卡片管理"
           description="管理所有 RFID 卡片"
         />
@@ -534,6 +537,7 @@ export const CardsPage: React.FC = () => {
   return (
     <div>
       <PageHeader
+        eyebrow="Cards"
         title="卡片管理"
         description="管理所有 RFID 卡片"
       />
@@ -541,15 +545,15 @@ export const CardsPage: React.FC = () => {
       <UICard>
         <CardContent className="p-0">
           {userIdFilter && filteredUserName && (
-            <div className="mx-6 mt-6 flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <span className="text-sm text-blue-900">
+            <div className="mx-6 mt-6 flex items-center gap-2 rounded-lg border border-border bg-muted/55 p-3">
+              <span className="text-sm text-text-primary">
                 <strong>篩選條件：</strong>顯示使用者「{filteredUserName}」的卡片
               </span>
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={clearFilter}
-                className="ml-auto gap-2 text-blue-900 hover:text-blue-700 hover:bg-blue-100"
+                className="ml-auto gap-2"
               >
                 <X className="w-4 h-4" />
                 清除篩選
@@ -643,7 +647,7 @@ export const CardsPage: React.FC = () => {
                             </Badge>
                           </TableCell>
                           <TableCell className="hidden lg:table-cell text-text-secondary">
-                            {new Date(card.created_at).toLocaleDateString()}
+                            {formatDate(card.created_at)}
                           </TableCell>
                           <TableCell className="text-right">
                             <button

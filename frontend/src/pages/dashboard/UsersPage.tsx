@@ -185,7 +185,7 @@ export const UsersPage: React.FC = () => {
   if (loading) {
     return (
       <div>
-        <PageHeader title="使用者管理" description="管理使用者資料與卡片綁定" />
+        <PageHeader eyebrow="Registration" title="使用者管理" description="管理使用者資料與卡片綁定" />
         <UICard>
           <CardContent className="pt-6">
             <div className="text-center py-8 text-text-secondary">載入中...</div>
@@ -198,7 +198,7 @@ export const UsersPage: React.FC = () => {
   if (error) {
     return (
       <div>
-        <PageHeader title="使用者管理" description="管理使用者資料與卡片綁定" />
+        <PageHeader eyebrow="Registration" title="使用者管理" description="管理使用者資料與卡片綁定" />
         <UICard>
           <CardContent className="pt-6">
             <div className="text-center py-8">
@@ -214,6 +214,7 @@ export const UsersPage: React.FC = () => {
   return (
     <div>
       <PageHeader
+        eyebrow="Registration"
         title="使用者管理"
         description="管理使用者資料與卡片綁定"
         actions={
