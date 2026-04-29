@@ -13,9 +13,9 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-ARG APP_VERSION=0.0.0
-ARG GIT_SHA=unknown
-ARG BUILD_TIME=unknown
+ARG APP_VERSION=""
+ARG GIT_SHA=""
+ARG BUILD_TIME=""
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
