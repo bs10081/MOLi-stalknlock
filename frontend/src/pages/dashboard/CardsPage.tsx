@@ -562,26 +562,28 @@ export const CardsPage: React.FC = () => {
           )}
 
           <div className={userIdFilter ? "p-6 pb-0 pt-4" : "p-6 pb-0"}>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 w-full sm:flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary" />
                 <Input
-                  placeholder="搜尋卡片 ID、別名或持有人..."
+                  placeholder="搜尋卡片 ID、別名、持有人"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 h-[34px]"
                 />
               </div>
-              <Button variant="secondary" className="flex-shrink-0 h-[34px] px-4">
-                搜尋
-              </Button>
-              <Button
-                className="gap-2 flex-shrink-0 h-[34px] px-4"
-                onClick={handleAdd}
-              >
-                <Plus className="w-4 h-4" />
-                新增卡片
-              </Button>
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+                <Button variant="secondary" className="h-[34px] w-full px-4 sm:w-auto">
+                  搜尋
+                </Button>
+                <Button
+                  className="h-[34px] w-full gap-2 px-4 sm:w-auto"
+                  onClick={handleAdd}
+                >
+                  <Plus className="w-4 h-4" />
+                  新增卡片
+                </Button>
+              </div>
             </div>
           </div>
 

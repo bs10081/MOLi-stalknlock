@@ -427,8 +427,8 @@ export const DoorControlPage: React.FC = () => {
       {pageError && <FeedbackNotice tone="error" message={pageError} />}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(320px,0.98fr)] xl:items-start">
-        <div className="space-y-6 self-start">
-          <Card variant="hero" className="overflow-hidden">
+        <div className="contents xl:block xl:space-y-6 xl:self-start">
+          <Card variant="hero" className="order-1 overflow-hidden">
             <CardHeader className="pb-4">
               <CardTitle>即時門況</CardTitle>
               <CardDescription>先看門目前是上鎖、暫時開門，還是已進入常開，現場判斷會更快。</CardDescription>
@@ -436,7 +436,7 @@ export const DoorControlPage: React.FC = () => {
             <CardContent className="space-y-4">
               <div className="rounded-[28px] border border-border/70 bg-muted/30 p-5 shadow-[0_18px_36px_-28px_rgba(17,17,17,0.12)]">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-start gap-4">
+                  <div className="flex min-w-0 items-start gap-4">
                     <span className={cn(
                       'inline-flex size-16 shrink-0 items-center justify-center rounded-[26px]',
                       isDoorOpen
@@ -449,7 +449,7 @@ export const DoorControlPage: React.FC = () => {
                         <Lock className="h-8 w-8" />
                       )}
                     </span>
-                    <div className="space-y-2">
+                    <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={getDoorStateVariant(status)} size="lg">
                           {getDoorStateLabel(status)}
@@ -469,10 +469,10 @@ export const DoorControlPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap lg:justify-end">
                     <Button
                       size="lg"
-                      className="gap-2"
+                      className="w-full gap-2 sm:w-auto"
                       loading={isUnlocking}
                       disabled={status?.door_state === 'unlocking' || status?.door_state === 'held_open'}
                       onClick={handleUnlock}
@@ -487,7 +487,7 @@ export const DoorControlPage: React.FC = () => {
                     <Button
                       variant="outline"
                       size="lg"
-                      className="gap-2"
+                      className="w-full gap-2 sm:w-auto"
                       loading={refreshing}
                       onClick={() => void loadDoorConsole(true)}
                     >
@@ -524,6 +524,7 @@ export const DoorControlPage: React.FC = () => {
             </CardContent>
           </Card>
 
+          <div className="order-3 space-y-6 xl:order-none">
           <Card variant="subtle">
             <CardHeader className="pb-3">
               <CardTitle>今日通行節奏</CardTitle>
@@ -557,20 +558,20 @@ export const DoorControlPage: React.FC = () => {
               <CardDescription>從門鎖、讀卡器到回應時間，都用同一個視角快速掌握。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex items-center justify-between rounded-[20px] border border-border/60 bg-white/82 px-4 py-3">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-3 rounded-[20px] border border-border/60 bg-white/82 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
                   <Cpu className="h-5 w-5 text-primary" />
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-medium text-text-primary">門鎖控制</p>
-                    <p className="text-xs text-text-secondary">GPIO {status?.lock_pin ?? '-'} / 觸發電平 {status?.lock_active_level ?? '-'}</p>
+                    <p className="break-words text-xs text-text-secondary">GPIO {status?.lock_pin ?? '-'} / 觸發電平 {status?.lock_active_level ?? '-'}</p>
                   </div>
                 </div>
-                <Badge variant={status?.gpio_available ? 'success' : 'warning'}>
+                <Badge className="self-start shrink-0 whitespace-nowrap sm:self-auto" variant={status?.gpio_available ? 'success' : 'warning'}>
                   {status?.gpio_available ? '硬體可用' : '模擬模式'}
                 </Badge>
               </div>
 
-              <div className="flex items-center justify-between gap-3 rounded-[20px] border border-border/60 bg-white/82 px-4 py-3">
+              <div className="flex flex-col gap-3 rounded-[20px] border border-border/60 bg-white/82 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
                   <Radio className="h-5 w-5 text-primary" />
                   <div className="min-w-0">
@@ -583,7 +584,7 @@ export const DoorControlPage: React.FC = () => {
                   </div>
                 </div>
                 <Badge
-                  className="shrink-0 whitespace-nowrap"
+                  className="self-start shrink-0 whitespace-nowrap sm:self-auto"
                   variant={status?.rfid_device_connected ? 'success' : 'warning'}
                 >
                   {status?.rfid_reader_mode === 'dev'
@@ -620,24 +621,25 @@ export const DoorControlPage: React.FC = () => {
               {recentLogs.length > 0 ? (
                 <div className="space-y-2.5">
                   {recentLogs.map((log) => (
-                    <div key={log.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-border/60 bg-white/82 px-4 py-3">
-                      <div>
+                    <div key={log.id} className="flex flex-col gap-3 rounded-[20px] border border-border/60 bg-white/82 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
                         <p className="font-medium text-text-primary">{log.user_name}</p>
-                        <p className="text-xs text-text-secondary">
+                        <p className="break-words text-xs text-text-secondary">
                           {log.student_id ? `${log.student_id} · ` : ''}卡片 {log.rfid_uid.slice(-8)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                         {status?.can_simulate_scan && (
                           <Button
                             variant="outline"
                             size="sm"
+                            className="w-full sm:w-auto"
                             onClick={() => void handleSimulateScan(log.rfid_uid)}
                           >
                             重播這張卡
                           </Button>
                         )}
-                        <div className="text-right">
+                        <div className="text-left sm:text-right">
                           <p className="text-sm text-text-secondary">{formatTimeOnly(log.timestamp)}</p>
                           <Badge variant={log.action === 'entry' ? 'success' : 'info'}>
                             {log.action === 'entry' ? '開門' : '綁定'}
@@ -676,9 +678,10 @@ export const DoorControlPage: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+          </div>
         </div>
 
-        <div className="space-y-6 self-start">
+        <div className="order-2 space-y-6 self-start xl:order-none">
           <Card>
             <CardHeader className="pb-4">
               <CardTitle>通行模式</CardTitle>
@@ -783,25 +786,26 @@ export const DoorControlPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
+                  <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
                     <p className="max-w-md text-xs leading-6 text-text-secondary">
                       {modeForm === 'first_scan_hold'
                         ? '建議把開始時間設在白天開放時段，並確保它早於每日上鎖時間。'
                         : modeForm === 'always_locked'
                           ? '切到永久上鎖後，現場仍可透過左欄的遠端開門處理特殊情況。'
-                          : '一般通行模式會依門鎖設定短暫開門，不會進入常開狀態。'}
+                        : '一般通行模式會依門鎖設定短暫開門，不會進入常開狀態。'}
                     </p>
 
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap">
                       <Button
                         variant="outline"
+                        className="w-full sm:w-auto"
                         disabled={!hasModeChanges}
                         onClick={resetModeForm}
                       >
                         還原
                       </Button>
                       <Button
-                        className="gap-2"
+                        className="w-full gap-2 sm:w-auto"
                         loading={isSavingMode}
                         disabled={!hasModeChanges}
                         onClick={handleSaveDoorSettings}
@@ -825,9 +829,9 @@ export const DoorControlPage: React.FC = () => {
                 <div className="space-y-2.5">
                   {events.map((event) => (
                     <div key={event.id} className="rounded-[20px] border border-border/60 bg-white/82 px-4 py-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
                             <Badge variant={event.action === 'remote_unlock' ? 'warning' : 'info'}>
                               {getEventLabel(event)}
                             </Badge>
@@ -838,7 +842,7 @@ export const DoorControlPage: React.FC = () => {
                           <p className="font-medium text-text-primary">{event.description || getEventLabel(event)}</p>
                           <p className="text-xs text-text-secondary">操作者：{event.admin_name}</p>
                         </div>
-                        <div className="text-right text-xs text-text-secondary">
+                        <div className="self-start text-left text-xs text-text-secondary sm:self-auto sm:text-right">
                           <p>{formatDateTimeLabel(event.created_at)}</p>
                           <p className="mt-1 uppercase tracking-[0.12em]">{event.source}</p>
                         </div>
@@ -872,16 +876,16 @@ export const DoorControlPage: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                   <Button
-                    className="gap-2"
+                    className="w-full gap-2 sm:w-auto"
                     loading={isSimulating}
                     onClick={() => void handleSimulateScan()}
                   >
                     <ScanLine className="h-4.5 w-4.5" />
                     模擬刷卡
                   </Button>
-                  <Button variant="outline" onClick={() => setScanInput('')}>
+                  <Button className="w-full sm:w-auto" variant="outline" onClick={() => setScanInput('')}>
                     清除
                   </Button>
                 </div>

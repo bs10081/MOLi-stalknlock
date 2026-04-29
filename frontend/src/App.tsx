@@ -15,8 +15,10 @@ import { DoorControlPage } from './pages/dashboard/DoorControlPage'
 import { SettingsPage } from './pages/dashboard/SettingsPage'
 
 function App() {
+  const routerBase = import.meta.env.DEV ? '/' : '/admin'
+
   return (
-    <Router basename="/admin">
+    <Router basename={routerBase}>
       <RouteMeta />
       <Routes>
         {/* 公開頁面 */}
