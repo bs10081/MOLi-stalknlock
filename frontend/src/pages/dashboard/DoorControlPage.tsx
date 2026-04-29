@@ -426,262 +426,107 @@ export const DoorControlPage: React.FC = () => {
 
       {pageError && <FeedbackNotice tone="error" message={pageError} />}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(320px,0.98fr)] xl:items-start">
-        <div className="contents xl:block xl:space-y-6 xl:self-start">
-          <Card variant="hero" className="order-1 overflow-hidden">
-            <CardHeader className="pb-4">
-              <CardTitle>即時門況</CardTitle>
-              <CardDescription>先看門目前是上鎖、暫時開門，還是已進入常開，現場判斷會更快。</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-[28px] border border-border/70 bg-muted/30 p-5 shadow-[0_18px_36px_-28px_rgba(17,17,17,0.12)]">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex min-w-0 items-start gap-4">
-                    <span className={cn(
-                      'inline-flex size-16 shrink-0 items-center justify-center rounded-[26px]',
-                      isDoorOpen
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-rose-100 text-rose-700'
-                    )}>
-                      {isDoorOpen ? (
-                        <DoorOpen className="h-8 w-8" />
-                      ) : (
-                        <Lock className="h-8 w-8" />
-                      )}
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={getDoorStateVariant(status)} size="lg">
-                          {getDoorStateLabel(status)}
-                        </Badge>
-                        <Badge variant={status?.dev_mode ? 'warning' : 'outline'}>
-                          {status?.dev_mode ? '測試環境' : '正式運行'}
-                        </Badge>
-                      </div>
-                      <div>
-                        <p className="text-3xl font-semibold tracking-tight text-text-primary">
-                          {isDoorOpen ? '目前可通行' : '目前維持鎖定'}
-                        </p>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
-                          {getDoorStateDetail(status, unlockCountdownSeconds)}
-                        </p>
-                      </div>
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(320px,0.98fr)] xl:items-start">
+        <Card
+          variant="hero"
+          className="order-1 min-w-0 overflow-hidden xl:order-none xl:col-start-1 xl:row-start-1 xl:self-start"
+        >
+          <CardHeader className="pb-4">
+            <CardTitle>即時門況</CardTitle>
+            <CardDescription>先看門目前是上鎖、暫時開門，還是已進入常開，現場判斷會更快。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-[28px] border border-border/70 bg-muted/30 p-5 shadow-[0_18px_36px_-28px_rgba(17,17,17,0.12)]">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 items-start gap-4">
+                  <span className={cn(
+                    'inline-flex size-16 shrink-0 items-center justify-center rounded-[26px]',
+                    isDoorOpen
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-rose-100 text-rose-700'
+                  )}>
+                    {isDoorOpen ? (
+                      <DoorOpen className="h-8 w-8" />
+                    ) : (
+                      <Lock className="h-8 w-8" />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={getDoorStateVariant(status)} size="lg">
+                        {getDoorStateLabel(status)}
+                      </Badge>
+                      <Badge variant={status?.dev_mode ? 'warning' : 'outline'}>
+                        {status?.dev_mode ? '測試環境' : '正式運行'}
+                      </Badge>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="break-words text-3xl font-semibold tracking-tight text-text-primary">
+                        {isDoorOpen ? '目前可通行' : '目前維持鎖定'}
+                      </p>
+                      <p className="mt-2 max-w-2xl break-words text-sm leading-6 text-text-secondary">
+                        {getDoorStateDetail(status, unlockCountdownSeconds)}
+                      </p>
                     </div>
                   </div>
+                </div>
 
-                  <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap lg:justify-end">
-                    <Button
-                      size="lg"
-                      className="w-full gap-2 sm:w-auto"
-                      loading={isUnlocking}
-                      disabled={status?.door_state === 'unlocking' || status?.door_state === 'held_open'}
-                      onClick={handleUnlock}
-                    >
-                      <DoorOpen className="h-5 w-5" />
-                      {status?.door_state === 'held_open'
-                        ? '目前維持解鎖'
-                        : status?.door_state === 'unlocking'
-                          ? '開門進行中'
-                          : '遠端開門'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      className="w-full gap-2 sm:w-auto"
-                      loading={refreshing}
-                      onClick={() => void loadDoorConsole(true)}
-                    >
-                      <RefreshCw className="h-5 w-5" />
-                      重新整理
-                    </Button>
-                  </div>
+                <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap lg:justify-end">
+                  <Button
+                    size="lg"
+                    className="w-full gap-2 sm:w-auto"
+                    loading={isUnlocking}
+                    disabled={status?.door_state === 'unlocking' || status?.door_state === 'held_open'}
+                    onClick={handleUnlock}
+                  >
+                    <DoorOpen className="h-5 w-5" />
+                    {status?.door_state === 'held_open'
+                      ? '目前維持解鎖'
+                      : status?.door_state === 'unlocking'
+                        ? '開門進行中'
+                        : '遠端開門'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="w-full gap-2 sm:w-auto"
+                    loading={refreshing}
+                    onClick={() => void loadDoorConsole(true)}
+                  >
+                    <RefreshCw className="h-5 w-5" />
+                    重新整理
+                  </Button>
                 </div>
               </div>
+            </div>
 
-              {doorFeedback && (
-                <FeedbackNotice tone={doorFeedback.tone} message={doorFeedback.message} />
-              )}
+            {doorFeedback && (
+              <FeedbackNotice tone={doorFeedback.tone} message={doorFeedback.message} />
+            )}
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-[22px] border border-border/70 bg-white p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">最近開始開門</p>
-                  <p className="mt-2 text-sm font-semibold text-text-primary">{formatDateTimeLabel(status?.last_unlock_started_at)}</p>
-                </div>
-                <div className="rounded-[22px] border border-border/70 bg-white p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">最近完成開門</p>
-                  <p className="mt-2 text-sm font-semibold text-text-primary">{formatDateTimeLabel(status?.last_unlock_finished_at)}</p>
-                </div>
-                <div className="rounded-[22px] border border-border/70 bg-white p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">協助開門次數</p>
-                  <p className="mt-2 text-2xl font-semibold text-text-primary">{status?.remote_unlock_count ?? 0}</p>
-                  <p className="mt-1 text-xs leading-5 text-text-secondary">
-                    {status?.last_remote_unlock_by
-                      ? `最近一次操作者：${status.last_remote_unlock_by}`
-                      : '目前尚無遠端開門事件'}
-                  </p>
-                </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[22px] border border-border/70 bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">最近開始開門</p>
+                <p className="mt-2 break-words text-sm font-semibold text-text-primary">{formatDateTimeLabel(status?.last_unlock_started_at)}</p>
               </div>
-            </CardContent>
-          </Card>
-
-          <div className="order-3 space-y-6 xl:order-none">
-          <Card variant="subtle">
-            <CardHeader className="pb-3">
-              <CardTitle>今日通行節奏</CardTitle>
-              <CardDescription>快速確認今天是一般通行、等待首刷，還是已進入常開。</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[20px] border border-border/60 bg-white/84 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">目前模式</p>
-                  <p className="mt-2 text-lg font-semibold text-text-primary">{getAccessModeLabel(status)}</p>
-                </div>
-                <div className="rounded-[20px] border border-border/60 bg-white/84 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">排程狀態</p>
-                  <p className="mt-2 text-lg font-semibold text-text-primary">{getSchedulePhaseLabel(status)}</p>
-                </div>
+              <div className="rounded-[22px] border border-border/70 bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">最近完成開門</p>
+                <p className="mt-2 break-words text-sm font-semibold text-text-primary">{formatDateTimeLabel(status?.last_unlock_finished_at)}</p>
               </div>
-
-              <div className="rounded-[22px] border border-border/60 bg-white/84 p-4">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">首刷常開開始 {status?.schedule_first_unlock_time || '09:00'}</Badge>
-                  <Badge variant="outline">每日上鎖 {status?.schedule_lock_time || '22:00'}</Badge>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-text-secondary">{getModeSummary(status)}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card variant="subtle">
-            <CardHeader className="pb-3">
-              <CardTitle>設備健康摘要</CardTitle>
-              <CardDescription>從門鎖、讀卡器到回應時間，都用同一個視角快速掌握。</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex flex-col gap-3 rounded-[20px] border border-border/60 bg-white/82 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-center gap-3">
-                  <Cpu className="h-5 w-5 text-primary" />
-                  <div className="min-w-0">
-                    <p className="font-medium text-text-primary">門鎖控制</p>
-                    <p className="break-words text-xs text-text-secondary">GPIO {status?.lock_pin ?? '-'} / 觸發電平 {status?.lock_active_level ?? '-'}</p>
-                  </div>
-                </div>
-                <Badge className="self-start shrink-0 whitespace-nowrap sm:self-auto" variant={status?.gpio_available ? 'success' : 'warning'}>
-                  {status?.gpio_available ? '硬體可用' : '模擬模式'}
-                </Badge>
-              </div>
-
-              <div className="flex flex-col gap-3 rounded-[20px] border border-border/60 bg-white/82 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-center gap-3">
-                  <Radio className="h-5 w-5 text-primary" />
-                  <div className="min-w-0">
-                    <p className="font-medium text-text-primary">讀卡設備</p>
-                    <p className="break-words text-xs text-text-secondary">
-                      {status?.rfid_reader_mode === 'dev'
-                        ? '目前使用測試刷卡流程'
-                        : status?.rfid_device_path || '等待硬體初始化'}
-                    </p>
-                  </div>
-                </div>
-                <Badge
-                  className="self-start shrink-0 whitespace-nowrap sm:self-auto"
-                  variant={status?.rfid_device_connected ? 'success' : 'warning'}
-                >
-                  {status?.rfid_reader_mode === 'dev'
-                    ? '測試模式'
-                    : status?.rfid_device_connected
-                      ? '已連線'
-                      : '未連線'}
-                </Badge>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-[20px] border border-border/60 bg-white/82 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">開門維持時間</p>
-                  <p className="mt-2 text-2xl font-semibold text-text-primary">{status?.lock_duration_seconds ?? '-'}s</p>
-                </div>
-                <div className="rounded-[20px] border border-border/60 bg-white/82 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">最近協助開門</p>
-                  <p className="mt-2 text-sm font-semibold text-text-primary">{formatDateTimeLabel(status?.last_remote_unlock_at)}</p>
-                </div>
-                <div className="rounded-[20px] border border-border/60 bg-white/82 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">門況</p>
-                  <p className="mt-2 text-sm font-semibold text-text-primary">{getDoorStateLabel(status)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card variant="subtle">
-            <CardHeader className="pb-3">
-              <CardTitle>最近存取記錄</CardTitle>
-              <CardDescription>確認最近的刷卡進出是否符合預期，也方便回頭追蹤現場反應。</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {recentLogs.length > 0 ? (
-                <div className="space-y-2.5">
-                  {recentLogs.map((log) => (
-                    <div key={log.id} className="flex flex-col gap-3 rounded-[20px] border border-border/60 bg-white/82 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="font-medium text-text-primary">{log.user_name}</p>
-                        <p className="break-words text-xs text-text-secondary">
-                          {log.student_id ? `${log.student_id} · ` : ''}卡片 {log.rfid_uid.slice(-8)}
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        {status?.can_simulate_scan && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full sm:w-auto"
-                            onClick={() => void handleSimulateScan(log.rfid_uid)}
-                          >
-                            重播這張卡
-                          </Button>
-                        )}
-                        <div className="text-left sm:text-right">
-                          <p className="text-sm text-text-secondary">{formatTimeOnly(log.timestamp)}</p>
-                          <Badge variant={log.action === 'entry' ? 'success' : 'info'}>
-                            {log.action === 'entry' ? '開門' : '綁定'}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-8 text-center text-text-secondary">暫無存取記錄</div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card variant="outline" className="border-yellow-200 bg-yellow-50/88">
-            <CardHeader className="pb-3">
-              <CardTitle>現場提醒</CardTitle>
-              <CardDescription>協助現場前，先快速確認這幾件事，處理起來會更穩。</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-start gap-3 rounded-[20px] border border-yellow-200 bg-white/84 p-4">
-                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700" />
-                <p className="text-sm text-yellow-900">
-                  協助開門會立即觸發門鎖，系統也會同步留下紀錄，方便後續追蹤與交接。
+              <div className="rounded-[22px] border border-border/70 bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">協助開門次數</p>
+                <p className="mt-2 text-2xl font-semibold text-text-primary">{status?.remote_unlock_count ?? 0}</p>
+                <p className="mt-1 break-words text-xs leading-5 text-text-secondary">
+                  {status?.last_remote_unlock_by
+                    ? `最近一次操作者：${status.last_remote_unlock_by}`
+                    : '目前尚無遠端開門事件'}
                 </p>
               </div>
-              <div className="flex items-start gap-3 rounded-[20px] border border-yellow-200 bg-white/84 p-4">
-                <Activity className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700" />
-                <p className="text-sm text-yellow-900">
-                  測試刷卡只會在開發模式提供，正式環境不會顯示這個入口。
-                </p>
-              </div>
-              <div className="rounded-[20px] border border-yellow-200 bg-white/84 p-4 text-sm leading-6 text-yellow-900">
-                若你正在協助排查，建議同時比對「最近控制事件」與「最近存取記錄」，會更快看出問題是在指令、卡片還是讀卡流程。
-              </div>
-            </CardContent>
-          </Card>
-          </div>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        <div className="order-2 space-y-6 self-start xl:order-none">
+        <div className="order-2 min-w-0 space-y-6 self-start xl:order-none xl:col-start-2 xl:row-span-2 xl:row-start-1">
           <Card>
             <CardHeader className="pb-4">
               <CardTitle>通行模式</CardTitle>
@@ -689,14 +534,16 @@ export const DoorControlPage: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-[24px] border border-border/60 bg-muted/28 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
+                <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">目前生效</p>
-                    <p className="mt-2 text-xl font-semibold text-text-primary">{getAccessModeLabel(status)}</p>
+                    <p className="mt-2 break-words text-xl font-semibold text-text-primary">{getAccessModeLabel(status)}</p>
                   </div>
-                  <Badge variant={getDoorStateVariant(status)}>{getSchedulePhaseLabel(status)}</Badge>
+                  <Badge className="self-start shrink-0 whitespace-nowrap sm:self-auto" variant={getDoorStateVariant(status)}>
+                    {getSchedulePhaseLabel(status)}
+                  </Badge>
                 </div>
-                <p className="mt-3 text-sm leading-6 text-text-secondary">{getModeSummary(status)}</p>
+                <p className="mt-3 break-words text-sm leading-6 text-text-secondary">{getModeSummary(status)}</p>
               </div>
 
               <div className="space-y-2.5">
@@ -712,7 +559,7 @@ export const DoorControlPage: React.FC = () => {
                         : 'border-border/60 bg-white hover:border-text-primary/18 hover:bg-muted/35'
                     )}
                   >
-                    <div className="flex items-start gap-3.5">
+                    <div className="flex min-w-0 items-start gap-3.5">
                       <span className={cn(
                         'inline-flex size-10 shrink-0 items-center justify-center rounded-[16px]',
                         status?.access_mode === option.mode
@@ -725,11 +572,11 @@ export const DoorControlPage: React.FC = () => {
                       </span>
 
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <p className="text-base font-semibold text-text-primary">{option.title}</p>
+                        <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="break-words text-base font-semibold text-text-primary">{option.title}</p>
                           <span
                             className={cn(
-                              'inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em] whitespace-nowrap',
+                              'inline-flex self-start shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em] whitespace-nowrap sm:self-auto',
                               status?.access_mode === option.mode
                                 ? 'border border-text-primary/10 bg-text-primary/[0.06] text-text-primary'
                                 : modeForm === option.mode
@@ -741,11 +588,11 @@ export const DoorControlPage: React.FC = () => {
                               ? '使用中'
                               : modeForm === option.mode
                                 ? '待套用'
-                                : '切換'}
+                              : '切換'}
                           </span>
                         </div>
-                        <p className="mt-2 text-sm leading-6 text-text-secondary">{option.description}</p>
-                        <p className="mt-2 text-xs font-medium tracking-[0.06em] text-text-secondary">{option.caption}</p>
+                        <p className="mt-2 break-words text-sm leading-6 text-text-secondary">{option.description}</p>
+                        <p className="mt-2 break-words text-xs font-medium tracking-[0.06em] text-text-secondary">{option.caption}</p>
                       </div>
                     </div>
                   </button>
@@ -839,12 +686,12 @@ export const DoorControlPage: React.FC = () => {
                               {event.result}
                             </Badge>
                           </div>
-                          <p className="font-medium text-text-primary">{event.description || getEventLabel(event)}</p>
-                          <p className="text-xs text-text-secondary">操作者：{event.admin_name}</p>
+                          <p className="break-words font-medium text-text-primary">{event.description || getEventLabel(event)}</p>
+                          <p className="break-words text-xs text-text-secondary">操作者：{event.admin_name}</p>
                         </div>
-                        <div className="self-start text-left text-xs text-text-secondary sm:self-auto sm:text-right">
-                          <p>{formatDateTimeLabel(event.created_at)}</p>
-                          <p className="mt-1 uppercase tracking-[0.12em]">{event.source}</p>
+                        <div className="min-w-0 self-start text-left text-xs text-text-secondary sm:self-auto sm:text-right">
+                          <p className="break-words">{formatDateTimeLabel(event.created_at)}</p>
+                          <p className="mt-1 break-words uppercase tracking-[0.12em]">{event.source}</p>
                         </div>
                       </div>
                     </div>
@@ -915,6 +762,162 @@ export const DoorControlPage: React.FC = () => {
             </Card>
           )}
 
+        </div>
+
+        <div className="order-3 min-w-0 space-y-6 xl:order-none xl:col-start-1 xl:row-start-2">
+          <Card variant="subtle">
+            <CardHeader className="pb-3">
+              <CardTitle>今日通行節奏</CardTitle>
+              <CardDescription>快速確認今天是一般通行、等待首刷，還是已進入常開。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[20px] border border-border/60 bg-white/84 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">目前模式</p>
+                  <p className="mt-2 break-words text-lg font-semibold text-text-primary">{getAccessModeLabel(status)}</p>
+                </div>
+                <div className="rounded-[20px] border border-border/60 bg-white/84 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">排程狀態</p>
+                  <p className="mt-2 break-words text-lg font-semibold text-text-primary">{getSchedulePhaseLabel(status)}</p>
+                </div>
+              </div>
+
+              <div className="rounded-[22px] border border-border/60 bg-white/84 p-4">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">首刷常開開始 {status?.schedule_first_unlock_time || '09:00'}</Badge>
+                  <Badge variant="outline">每日上鎖 {status?.schedule_lock_time || '22:00'}</Badge>
+                </div>
+                <p className="mt-3 break-words text-sm leading-6 text-text-secondary">{getModeSummary(status)}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card variant="subtle">
+            <CardHeader className="pb-3">
+              <CardTitle>設備健康摘要</CardTitle>
+              <CardDescription>從門鎖、讀卡器到回應時間，都用同一個視角快速掌握。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-col gap-3 rounded-[20px] border border-border/60 bg-white/82 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Cpu className="h-5 w-5 text-primary" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-text-primary">門鎖控制</p>
+                    <p className="break-words text-xs text-text-secondary">GPIO {status?.lock_pin ?? '-'} / 觸發電平 {status?.lock_active_level ?? '-'}</p>
+                  </div>
+                </div>
+                <Badge className="self-start shrink-0 whitespace-nowrap sm:self-auto" variant={status?.gpio_available ? 'success' : 'warning'}>
+                  {status?.gpio_available ? '硬體可用' : '模擬模式'}
+                </Badge>
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-[20px] border border-border/60 bg-white/82 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Radio className="h-5 w-5 text-primary" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-text-primary">讀卡設備</p>
+                    <p className="break-words text-xs text-text-secondary">
+                      {status?.rfid_reader_mode === 'dev'
+                        ? '目前使用測試刷卡流程'
+                        : status?.rfid_device_path || '等待硬體初始化'}
+                    </p>
+                  </div>
+                </div>
+                <Badge
+                  className="self-start shrink-0 whitespace-nowrap sm:self-auto"
+                  variant={status?.rfid_device_connected ? 'success' : 'warning'}
+                >
+                  {status?.rfid_reader_mode === 'dev'
+                    ? '測試模式'
+                    : status?.rfid_device_connected
+                      ? '已連線'
+                      : '未連線'}
+                </Badge>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-[20px] border border-border/60 bg-white/82 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">開門維持時間</p>
+                  <p className="mt-2 text-2xl font-semibold text-text-primary">{status?.lock_duration_seconds ?? '-'}s</p>
+                </div>
+                <div className="rounded-[20px] border border-border/60 bg-white/82 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">最近協助開門</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-text-primary">{formatDateTimeLabel(status?.last_remote_unlock_at)}</p>
+                </div>
+                <div className="rounded-[20px] border border-border/60 bg-white/82 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">門況</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-text-primary">{getDoorStateLabel(status)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card variant="subtle">
+            <CardHeader className="pb-3">
+              <CardTitle>最近存取記錄</CardTitle>
+              <CardDescription>確認最近的刷卡進出是否符合預期，也方便回頭追蹤現場反應。</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {recentLogs.length > 0 ? (
+                <div className="space-y-2.5">
+                  {recentLogs.map((log) => (
+                    <div key={log.id} className="flex flex-col gap-3 rounded-[20px] border border-border/60 bg-white/82 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="font-medium text-text-primary">{log.user_name}</p>
+                        <p className="break-words text-xs text-text-secondary">
+                          {log.student_id ? `${log.student_id} · ` : ''}卡片 {log.rfid_uid.slice(-8)}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        {status?.can_simulate_scan && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            onClick={() => void handleSimulateScan(log.rfid_uid)}
+                          >
+                            重播這張卡
+                          </Button>
+                        )}
+                        <div className="text-left sm:text-right">
+                          <p className="break-words text-sm text-text-secondary">{formatTimeOnly(log.timestamp)}</p>
+                          <Badge variant={log.action === 'entry' ? 'success' : 'info'}>
+                            {log.action === 'entry' ? '開門' : '綁定'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center text-text-secondary">暫無存取記錄</div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card variant="outline" className="border-yellow-200 bg-yellow-50/88">
+            <CardHeader className="pb-3">
+              <CardTitle>現場提醒</CardTitle>
+              <CardDescription>協助現場前，先快速確認這幾件事，處理起來會更穩。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-start gap-3 rounded-[20px] border border-yellow-200 bg-white/84 p-4">
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700" />
+                <p className="text-sm text-yellow-900">
+                  協助開門會立即觸發門鎖，系統也會同步留下紀錄，方便後續追蹤與交接。
+                </p>
+              </div>
+              <div className="flex items-start gap-3 rounded-[20px] border border-yellow-200 bg-white/84 p-4">
+                <Activity className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700" />
+                <p className="text-sm text-yellow-900">
+                  測試刷卡只會在開發模式提供，正式環境不會顯示這個入口。
+                </p>
+              </div>
+              <div className="rounded-[20px] border border-yellow-200 bg-white/84 p-4 text-sm leading-6 text-yellow-900">
+                若你正在協助排查，建議同時比對「最近控制事件」與「最近存取記錄」，會更快看出問題是在指令、卡片還是讀卡流程。
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

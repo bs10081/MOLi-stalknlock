@@ -67,11 +67,24 @@ cd frontend && npm install && npm run dev
 
 ```bash
 # 本地手動建置並推送 ARM64 映像
-docker buildx build --platform linux/arm64 -t bs10081/moli-door:dev --push .
+VERSION=$(cat VERSION)
+GIT_SHA=$(git rev-parse HEAD)
+BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+docker buildx build --platform linux/arm64 \
+  --build-arg APP_VERSION=$VERSION \
+  --build-arg GIT_SHA=$GIT_SHA \
+  --build-arg BUILD_TIME=$BUILD_TIME \
+  -t bs10081/moli-door:$VERSION \
+  -t bs10081/moli-door:dev \
+  -t bs10081/moli-door:latest \
+  --push .
 
 # 樹莓派首次部署 / 手動更新
 ssh moli-door "cd /home/pi/Host/MOLi-stalknlock && docker compose pull && docker compose up -d"
 ```
+
+手動發版前，請先確認 `VERSION`、`frontend/package.json`、`frontend/package-lock.json` 已同步到相同版本號；否則管理介面顯示的版本資訊可能和實際 image tag 不一致。
 
 ### 自動化部署（GitHub Actions + Watchtower）
 

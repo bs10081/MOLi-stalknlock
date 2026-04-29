@@ -28,9 +28,22 @@ cd frontend && npm run dev
 # 設置 buildx builder（首次）
 docker buildx create --use --name multiarch
 
-# 建置並推送 ARM64 映像檔
-docker buildx build --platform linux/arm64 -t bs10081/moli-door:dev --push .
+# 建置並推送 ARM64 映像檔（手動發版時一定要帶版本號與 build args）
+VERSION=$(cat VERSION)
+GIT_SHA=$(git rev-parse HEAD)
+BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+docker buildx build --platform linux/arm64 \
+  --build-arg APP_VERSION=$VERSION \
+  --build-arg GIT_SHA=$GIT_SHA \
+  --build-arg BUILD_TIME=$BUILD_TIME \
+  -t bs10081/moli-door:$VERSION \
+  -t bs10081/moli-door:dev \
+  -t bs10081/moli-door:latest \
+  --push .
 ```
+
+手動 `docker buildx build` 時，必須先確認 `VERSION`、`frontend/package.json`、`frontend/package-lock.json` 已同步更新到同一個版本號，並將該版本號帶入 image tag 與 `APP_VERSION` build arg；否則執行中的版本資訊可能退回成預設值。
 
 #### 樹莓派部署
 ```bash
@@ -106,6 +119,7 @@ ssh moli-door "cd /home/pi/Host/MOLi-stalknlock && docker compose build && docke
 - [ ] 已設置唯一的 `JWT_SECRET_KEY`（≥32 字元）
 - [ ] `.env` 檔案已配置完整（參考 `.env.example`）
 - [ ] Docker 容器使用 `cap_add` 而非 `privileged`
+- [ ] 手動 `buildx` 發版時已輸入正確版本號，並傳入 `APP_VERSION`、`GIT_SHA`、`BUILD_TIME`
 - [ ] 速率限制已測試（5 次失敗登入後鎖定 1 分鐘）
 - [ ] HTTPS 已啟用（Cookie secure 屬性生效）
 
