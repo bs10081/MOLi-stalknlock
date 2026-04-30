@@ -12,8 +12,12 @@ from app.routers.dependencies import get_current_admin
 from app.services.card_uid import CardUIDNormalizationError, normalize_card_uid_input
 from app.services.door_mode import (
     MODE_ALWAYS_LOCKED,
+    MODE_FIRST_SCAN_FLEX,
     MODE_FIRST_SCAN_HOLD,
     MODE_NORMAL,
+    can_defer_mode_switch,
+    get_access_mode_label,
+    is_schedule_access_mode,
     serialize_door_settings,
     sync_door_hardware_state,
     validate_schedule_config,
@@ -28,6 +32,9 @@ from app.timezone import app_time_to_utc_naive, now_app_timezone, serialize_date
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+APPLY_TIMING_IMMEDIATE = "immediate"
+APPLY_TIMING_NEXT_CYCLE = "next_cycle"
 
 
 def _build_door_status_payload(db: Session) -> dict:
@@ -61,8 +68,23 @@ def _describe_door_mode(access_mode: str, daily_lock_time: str, first_unlock_tim
     if access_mode == MODE_ALWAYS_LOCKED:
         return "門禁已切換為永久上鎖模式。"
     if access_mode == MODE_FIRST_SCAN_HOLD:
-        return f"門禁已設定為每日 {daily_lock_time} 上鎖，{first_unlock_time} 後首張有效卡會維持解鎖。"
+        return (
+            f"門禁已設定為每日 {daily_lock_time} 上鎖，"
+            f"{first_unlock_time} 後首張有效卡會維持解鎖，時段外禁止刷卡。"
+        )
+    if access_mode == MODE_FIRST_SCAN_FLEX:
+        return (
+            f"門禁已設定為每日 {daily_lock_time} 上鎖，"
+            f"{first_unlock_time} 後首張有效卡會維持解鎖，時段外仍可一般通行。"
+        )
     return "門禁已恢復為一般刷卡開門模式。"
+
+
+def _describe_scheduled_mode_change(next_access_mode: str, daily_lock_time: str) -> str:
+    return (
+        f"門禁將於今日 {daily_lock_time} 上鎖後，切換為"
+        f"{get_access_mode_label(next_access_mode)}。"
+    )
 
 @router.get("/users")
 async def list_users(
@@ -610,6 +632,7 @@ async def update_door_settings(
     access_mode: str = Form(...),
     daily_lock_time: Optional[str] = Form(None),
     first_unlock_time: Optional[str] = Form(None),
+    apply_timing: str = Form(APPLY_TIMING_IMMEDIATE),
     background_tasks: BackgroundTasks = None,
     admin_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db)
@@ -617,8 +640,10 @@ async def update_door_settings(
     """更新門禁模式與每日首刷常開排程。"""
     current_admin = get_current_admin(admin_token)
 
-    if access_mode not in {MODE_NORMAL, MODE_ALWAYS_LOCKED, MODE_FIRST_SCAN_HOLD}:
+    if access_mode not in {MODE_NORMAL, MODE_ALWAYS_LOCKED, MODE_FIRST_SCAN_HOLD, MODE_FIRST_SCAN_FLEX}:
         raise HTTPException(400, "不支援的門禁模式")
+    if apply_timing not in {APPLY_TIMING_IMMEDIATE, APPLY_TIMING_NEXT_CYCLE}:
+        raise HTTPException(400, "不支援的套用時機")
 
     try:
         normalized_daily_lock_time, normalized_first_unlock_time = validate_schedule_config(
@@ -628,29 +653,58 @@ async def update_door_settings(
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
-    settings, _, _ = sync_door_hardware_state(db)
-    settings.access_mode = access_mode
-    settings.daily_lock_time = normalized_daily_lock_time
-    settings.first_unlock_time = normalized_first_unlock_time
-    if access_mode != MODE_FIRST_SCAN_HOLD:
-        settings.schedule_hold_date = None
-        settings.schedule_hold_started_at = None
+    settings, evaluation, _ = sync_door_hardware_state(db)
+    current_daily_lock_time = settings.daily_lock_time or normalized_daily_lock_time
+    current_first_unlock_time = settings.first_unlock_time or normalized_first_unlock_time
+
+    if apply_timing == APPLY_TIMING_NEXT_CYCLE:
+        if not can_defer_mode_switch(
+            settings.access_mode,
+            access_mode,
+            evaluation.phase,
+            current_daily_lock_time,
+            current_first_unlock_time,
+            normalized_daily_lock_time,
+            normalized_first_unlock_time,
+        ):
+            raise HTTPException(
+                400,
+                "只有在今日已常開、且僅於兩種首刷常開模式間切換時，才能改為今日上鎖後生效。",
+            )
+
+        settings.pending_access_mode = access_mode
+        description = _describe_scheduled_mode_change(access_mode, current_daily_lock_time)
+        event_action = "door_settings_scheduled"
+    else:
+        settings.access_mode = access_mode
+        settings.pending_access_mode = None
+        settings.daily_lock_time = normalized_daily_lock_time
+        settings.first_unlock_time = normalized_first_unlock_time
+
+        if not is_schedule_access_mode(access_mode):
+            settings.schedule_hold_date = None
+            settings.schedule_hold_started_at = None
+
+        description = _describe_door_mode(
+            settings.access_mode,
+            settings.daily_lock_time,
+            settings.first_unlock_time,
+        )
+        event_action = "door_settings_updated"
 
     db.add(settings)
     db.commit()
     db.refresh(settings)
 
-    settings, evaluation, _ = sync_door_hardware_state(db, interrupt_timed_unlock=True)
-    description = _describe_door_mode(
-        settings.access_mode,
-        settings.daily_lock_time,
-        settings.first_unlock_time,
-    )
+    if apply_timing == APPLY_TIMING_NEXT_CYCLE:
+        settings, evaluation, _ = sync_door_hardware_state(db, interrupt_timed_unlock=False)
+    else:
+        settings, evaluation, _ = sync_door_hardware_state(db, interrupt_timed_unlock=True)
 
     event = DoorEvent(
         admin_id=current_admin["id"],
         admin_name=current_admin["name"],
-        action="door_settings_updated",
+        action=event_action,
         source="door_control_ui",
         result="accepted",
         description=description,
@@ -665,7 +719,6 @@ async def update_door_settings(
         )
 
     status = _build_door_status_payload(db)
-    status.update(serialize_door_settings(settings, evaluation))
 
     return {
         "message": description,

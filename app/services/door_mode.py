@@ -12,11 +12,19 @@ from app.timezone import app_time_to_utc_naive, now_app_timezone, serialize_date
 MODE_NORMAL = "normal"
 MODE_ALWAYS_LOCKED = "always_locked"
 MODE_FIRST_SCAN_HOLD = "first_scan_hold"
+MODE_FIRST_SCAN_FLEX = "first_scan_flex"
+
+SCHEDULE_ACCESS_MODES = {MODE_FIRST_SCAN_HOLD, MODE_FIRST_SCAN_FLEX}
 
 SCHEDULE_PHASE_INACTIVE = "inactive"
-SCHEDULE_PHASE_LOCKED_WINDOW = "locked_window"
+SCHEDULE_PHASE_OUTSIDE_SCHEDULE = "outside_schedule"
 SCHEDULE_PHASE_WAITING_FOR_FIRST_SCAN = "waiting_for_first_scan"
 SCHEDULE_PHASE_HELD_OPEN = "held_open"
+
+ACCESS_DECISION_DENY = "deny"
+ACCESS_DECISION_TIMED_UNLOCK = "timed_unlock"
+ACCESS_DECISION_ACTIVATE_HOLD = "activate_hold"
+ACCESS_DECISION_HELD_OPEN = "held_open"
 
 DEFAULT_DAILY_LOCK_TIME = "22:00"
 DEFAULT_FIRST_UNLOCK_TIME = "09:00"
@@ -28,6 +36,61 @@ class ScheduleEvaluation:
     now_local: datetime
     today: str
     should_clear_hold: bool
+
+
+def is_schedule_access_mode(access_mode: str | None) -> bool:
+    return access_mode in SCHEDULE_ACCESS_MODES
+
+
+def get_access_mode_label(access_mode: str | None) -> str:
+    if access_mode == MODE_ALWAYS_LOCKED:
+        return "永久上鎖"
+    if access_mode == MODE_FIRST_SCAN_HOLD:
+        return "每日首刷常開（時段外禁止刷卡）"
+    if access_mode == MODE_FIRST_SCAN_FLEX:
+        return "每日首刷常開（時段外一般通行）"
+    return "一般通行"
+
+
+def get_card_access_decision(access_mode: str, schedule_phase: str) -> str:
+    if access_mode == MODE_ALWAYS_LOCKED:
+        return ACCESS_DECISION_DENY
+
+    if access_mode == MODE_FIRST_SCAN_HOLD:
+        if schedule_phase == SCHEDULE_PHASE_OUTSIDE_SCHEDULE:
+            return ACCESS_DECISION_DENY
+        if schedule_phase == SCHEDULE_PHASE_WAITING_FOR_FIRST_SCAN:
+            return ACCESS_DECISION_ACTIVATE_HOLD
+        if schedule_phase == SCHEDULE_PHASE_HELD_OPEN:
+            return ACCESS_DECISION_HELD_OPEN
+        return ACCESS_DECISION_TIMED_UNLOCK
+
+    if access_mode == MODE_FIRST_SCAN_FLEX:
+        if schedule_phase == SCHEDULE_PHASE_WAITING_FOR_FIRST_SCAN:
+            return ACCESS_DECISION_ACTIVATE_HOLD
+        if schedule_phase == SCHEDULE_PHASE_HELD_OPEN:
+            return ACCESS_DECISION_HELD_OPEN
+        return ACCESS_DECISION_TIMED_UNLOCK
+
+    return ACCESS_DECISION_TIMED_UNLOCK
+
+
+def can_defer_mode_switch(
+    current_access_mode: str,
+    next_access_mode: str,
+    schedule_phase: str,
+    current_daily_lock_time: str,
+    current_first_unlock_time: str,
+    next_daily_lock_time: str,
+    next_first_unlock_time: str,
+) -> bool:
+    return (
+        schedule_phase == SCHEDULE_PHASE_HELD_OPEN
+        and is_schedule_access_mode(current_access_mode)
+        and is_schedule_access_mode(next_access_mode)
+        and current_daily_lock_time == next_daily_lock_time
+        and current_first_unlock_time == next_first_unlock_time
+    )
 
 
 def parse_time_value(value: str | None) -> time | None:
@@ -111,7 +174,7 @@ def evaluate_schedule(
     now_local = now_local or now_app_timezone()
     today = now_local.date().isoformat()
 
-    if settings.access_mode != MODE_FIRST_SCAN_HOLD:
+    if not is_schedule_access_mode(settings.access_mode):
         return ScheduleEvaluation(
             phase=SCHEDULE_PHASE_INACTIVE,
             now_local=now_local,
@@ -128,12 +191,12 @@ def evaluate_schedule(
     daily_lock = parse_time_value(daily_lock_time)
     first_unlock = parse_time_value(first_unlock_time)
 
-    in_locked_window = current_time >= daily_lock or current_time < first_unlock
-    hold_is_active = settings.schedule_hold_date == today and not in_locked_window
+    in_outside_schedule = current_time >= daily_lock or current_time < first_unlock
+    hold_is_active = settings.schedule_hold_date == today and not in_outside_schedule
     should_clear_hold = bool(settings.schedule_hold_date or settings.schedule_hold_started_at) and not hold_is_active
 
-    if in_locked_window:
-        phase = SCHEDULE_PHASE_LOCKED_WINDOW
+    if in_outside_schedule:
+        phase = SCHEDULE_PHASE_OUTSIDE_SCHEDULE
     elif hold_is_active:
         phase = SCHEDULE_PHASE_HELD_OPEN
     else:
@@ -177,13 +240,23 @@ def sync_door_hardware_state(
     mutated = False
     hardware_action = None
     current_door_state = runtime["door_state"]
+    cleared_schedule_hold = False
+    previous_access_mode = settings.access_mode
+    applied_pending_mode = None
 
     if evaluation.should_clear_hold:
+        cleared_schedule_hold = True
         clear_schedule_hold(settings)
+
+        if settings.pending_access_mode:
+            previous_access_mode = settings.access_mode
+            settings.access_mode = settings.pending_access_mode
+            settings.pending_access_mode = None
+            applied_pending_mode = settings.access_mode
+
         db.add(settings)
         db.commit()
         db.refresh(settings)
-        settings = settings
         evaluation = evaluate_schedule(settings, evaluation.now_local)
         mutated = True
 
@@ -197,6 +270,9 @@ def sync_door_hardware_state(
             should_hold_open = True
         else:
             should_force_lock = True
+    elif settings.access_mode == MODE_FIRST_SCAN_FLEX:
+        should_hold_open = evaluation.phase == SCHEDULE_PHASE_HELD_OPEN
+        should_force_lock = current_door_state == "held_open" and evaluation.phase != SCHEDULE_PHASE_HELD_OPEN
     else:
         should_force_lock = current_door_state == "held_open"
 
@@ -213,6 +289,9 @@ def sync_door_hardware_state(
     return settings, evaluation, {
         "mutated": mutated,
         "hardware_action": hardware_action,
+        "cleared_schedule_hold": cleared_schedule_hold,
+        "previous_access_mode": previous_access_mode,
+        "applied_pending_mode": applied_pending_mode,
     }
 
 
@@ -223,6 +302,7 @@ def serialize_door_settings(
     evaluation = evaluation or evaluate_schedule(settings)
     return {
         "access_mode": settings.access_mode,
+        "pending_access_mode": settings.pending_access_mode,
         "schedule_lock_time": settings.daily_lock_time or DEFAULT_DAILY_LOCK_TIME,
         "schedule_first_unlock_time": settings.first_unlock_time or DEFAULT_FIRST_UNLOCK_TIME,
         "schedule_phase": evaluation.phase,

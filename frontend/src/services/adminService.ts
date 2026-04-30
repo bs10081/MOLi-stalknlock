@@ -58,11 +58,13 @@ export const adminService = {
     accessMode: DoorAccessMode,
     dailyLockTime?: string,
     firstUnlockTime?: string,
+    applyTiming: 'immediate' | 'next_cycle' = 'immediate',
   ) => {
     const formData = new FormData()
     formData.append('access_mode', accessMode)
     if (dailyLockTime !== undefined) formData.append('daily_lock_time', dailyLockTime)
     if (firstUnlockTime !== undefined) formData.append('first_unlock_time', firstUnlockTime)
+    formData.append('apply_timing', applyTiming)
     return api.put('/admin/door/settings', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',

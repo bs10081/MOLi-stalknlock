@@ -77,6 +77,7 @@ class DoorControlSettings(Base):
 
     id = Column(Integer, primary_key=True, default=1)
     access_mode = Column(String(20), nullable=False, default="normal")
+    pending_access_mode = Column(String(20), nullable=True)
     daily_lock_time = Column(String(5), nullable=True)
     first_unlock_time = Column(String(5), nullable=True)
     schedule_hold_date = Column(String(10), nullable=True)
@@ -122,12 +123,20 @@ def init_db():
 def _ensure_runtime_columns():
     """Apply lightweight SQLite-safe schema additions needed by newer code paths."""
     inspector = inspect(engine)
-    if "registration_sessions" not in inspector.get_table_names():
-        return
+    table_names = set(inspector.get_table_names())
 
-    column_names = {column["name"] for column in inspector.get_columns("registration_sessions")}
-    if "last_status" not in column_names:
-        with engine.begin() as connection:
-            connection.execute(
-                text("ALTER TABLE registration_sessions ADD COLUMN last_status VARCHAR(50)")
-            )
+    if "registration_sessions" in table_names:
+        column_names = {column["name"] for column in inspector.get_columns("registration_sessions")}
+        if "last_status" not in column_names:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE registration_sessions ADD COLUMN last_status VARCHAR(50)")
+                )
+
+    if "door_control_settings" in table_names:
+        column_names = {column["name"] for column in inspector.get_columns("door_control_settings")}
+        if "pending_access_mode" not in column_names:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE door_control_settings ADD COLUMN pending_access_mode VARCHAR(20)")
+                )

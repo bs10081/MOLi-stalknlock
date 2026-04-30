@@ -23,12 +23,17 @@ from app.versioning import get_app_version, get_build_info
 from app.services.rfid_reader import rfid_reader
 from app.services.gpio_control import open_lock, deny_access
 from app.services.door_mode import (
+    ACCESS_DECISION_ACTIVATE_HOLD,
+    ACCESS_DECISION_DENY,
+    ACCESS_DECISION_HELD_OPEN,
     MODE_ALWAYS_LOCKED,
     MODE_FIRST_SCAN_HOLD,
+    SCHEDULE_PHASE_OUTSIDE_SCHEDULE,
     SCHEDULE_PHASE_HELD_OPEN,
-    SCHEDULE_PHASE_LOCKED_WINDOW,
-    SCHEDULE_PHASE_WAITING_FOR_FIRST_SCAN,
     activate_schedule_hold,
+    get_access_mode_label,
+    get_card_access_decision,
+    is_schedule_access_mode,
     sync_door_hardware_state,
 )
 from app.services.registration import (
@@ -57,8 +62,35 @@ async def door_mode_heartbeat():
             with SessionLocal() as db:
                 settings, evaluation, sync_result = sync_door_hardware_state(db)
                 hardware_action = sync_result.get("hardware_action")
+                applied_pending_mode = sync_result.get("applied_pending_mode")
+                cleared_schedule_hold = bool(sync_result.get("cleared_schedule_hold"))
+                previous_access_mode = sync_result.get("previous_access_mode")
 
-                if hardware_action == "force_lock":
+                if applied_pending_mode:
+                    db.add(DoorEvent(
+                        admin_id=None,
+                        admin_name="系統自動化",
+                        action="door_settings_applied",
+                        source="door_scheduler",
+                        result="accepted",
+                        description=(
+                            f"已到每日上鎖時間，門禁模式已切換為"
+                            f"{get_access_mode_label(applied_pending_mode)}。"
+                        ),
+                    ))
+                    db.commit()
+                elif cleared_schedule_hold and is_schedule_access_mode(previous_access_mode):
+                    db.add(DoorEvent(
+                        admin_id=None,
+                        admin_name="系統自動化",
+                        action="schedule_auto_lock",
+                        source="door_scheduler",
+                        result="accepted",
+                        description=f"已到每日上鎖時間，門禁恢復上鎖（{settings.daily_lock_time}）。",
+                    ))
+                    db.commit()
+
+                if hardware_action == "force_lock" and not applied_pending_mode:
                     if settings.access_mode == MODE_ALWAYS_LOCKED:
                         db.add(DoorEvent(
                             admin_id=None,
@@ -67,16 +99,6 @@ async def door_mode_heartbeat():
                             source="door_scheduler",
                             result="accepted",
                             description="門禁維持在永久上鎖模式。",
-                        ))
-                        db.commit()
-                    elif settings.access_mode == MODE_FIRST_SCAN_HOLD and evaluation.phase == SCHEDULE_PHASE_LOCKED_WINDOW:
-                        db.add(DoorEvent(
-                            admin_id=None,
-                            admin_name="系統自動化",
-                            action="schedule_auto_lock",
-                            source="door_scheduler",
-                            result="accepted",
-                            description=f"已到每日上鎖時間，門禁恢復上鎖（{settings.daily_lock_time}）。",
                         ))
                         db.commit()
         except asyncio.CancelledError:
@@ -143,31 +165,32 @@ async def handle_normal_mode(card_uid: str, db: Session, card: Optional[Card] = 
     settings, schedule_evaluation, _ = sync_door_hardware_state(db)
     access_note = ""
 
-    if settings.access_mode == MODE_ALWAYS_LOCKED:
-        log.warning(f"⚠️ Access denied by always-locked mode: {user_name} ({student_id})")
+    access_decision = get_card_access_decision(settings.access_mode, schedule_evaluation.phase)
+
+    if access_decision == ACCESS_DECISION_DENY:
+        if settings.access_mode == MODE_ALWAYS_LOCKED:
+            log.warning(f"⚠️ Access denied by always-locked mode: {user_name} ({student_id})")
+        elif settings.access_mode == MODE_FIRST_SCAN_HOLD and schedule_evaluation.phase == SCHEDULE_PHASE_OUTSIDE_SCHEDULE:
+            log.warning(f"⚠️ Access denied outside schedule window: {user_name} ({student_id})")
+        else:
+            log.warning(f"⚠️ Access denied by access mode policy: {user_name} ({student_id})")
         deny_access()
         return
 
-    if settings.access_mode == MODE_FIRST_SCAN_HOLD:
-        if schedule_evaluation.phase == SCHEDULE_PHASE_LOCKED_WINDOW:
-            log.warning(f"⚠️ Access denied during scheduled locked window: {user_name} ({student_id})")
-            deny_access()
-            return
-
-        if schedule_evaluation.phase == SCHEDULE_PHASE_WAITING_FOR_FIRST_SCAN:
-            activate_schedule_hold(db, settings)
-            access_note = f"，已切換為今日常開，預計 {settings.daily_lock_time} 自動上鎖"
-            db.add(DoorEvent(
-                admin_id=None,
-                admin_name=user_name,
-                action="schedule_hold_open",
-                source="rfid_access",
-                result="accepted",
-                description=f"{user_name} 首次刷卡後，門禁維持解鎖直到 {settings.daily_lock_time}。",
-            ))
-            db.commit()
-        elif schedule_evaluation.phase == SCHEDULE_PHASE_HELD_OPEN:
-            access_note = f"，目前維持常開至 {settings.daily_lock_time}"
+    if access_decision == ACCESS_DECISION_ACTIVATE_HOLD:
+        activate_schedule_hold(db, settings)
+        access_note = f"，已切換為今日常開，預計 {settings.daily_lock_time} 自動上鎖"
+        db.add(DoorEvent(
+            admin_id=None,
+            admin_name=user_name,
+            action="schedule_hold_open",
+            source="rfid_access",
+            result="accepted",
+            description=f"{user_name} 首次刷卡後，門禁維持解鎖直到 {settings.daily_lock_time}。",
+        ))
+        db.commit()
+    elif access_decision == ACCESS_DECISION_HELD_OPEN:
+        access_note = f"，目前維持常開至 {settings.daily_lock_time}"
     else:
         asyncio.create_task(asyncio.to_thread(open_lock))
 
@@ -238,7 +261,8 @@ async def handle_register_mode(card_uid: str, db: Session, session):
         log.info(f"🎉 Card bound: {user.student_id} -> {card_uid} (總共 {card_count} 張卡片)")
 
         settings, schedule_evaluation, _ = sync_door_hardware_state(db)
-        if settings.access_mode != MODE_ALWAYS_LOCKED and schedule_evaluation.phase != SCHEDULE_PHASE_HELD_OPEN:
+        access_decision = get_card_access_decision(settings.access_mode, schedule_evaluation.phase)
+        if access_decision not in {ACCESS_DECISION_DENY, ACCESS_DECISION_HELD_OPEN}:
             asyncio.create_task(asyncio.to_thread(open_lock))
         asyncio.create_task(asyncio.to_thread(
             send_telegram,

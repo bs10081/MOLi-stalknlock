@@ -35,8 +35,8 @@ export interface AccessLog {
   timestamp: string
 }
 
-export type DoorAccessMode = 'normal' | 'always_locked' | 'first_scan_hold'
-export type DoorSchedulePhase = 'inactive' | 'locked_window' | 'waiting_for_first_scan' | 'held_open'
+export type DoorAccessMode = 'normal' | 'always_locked' | 'first_scan_hold' | 'first_scan_flex'
+export type DoorSchedulePhase = 'inactive' | 'outside_schedule' | 'waiting_for_first_scan' | 'held_open'
 
 export interface DoorStatus {
   door_state: 'locked' | 'unlocking' | 'held_open'
@@ -57,6 +57,7 @@ export interface DoorStatus {
   last_remote_unlock_by?: string | null
   remote_unlock_count: number
   access_mode: DoorAccessMode
+  pending_access_mode?: DoorAccessMode | null
   schedule_lock_time: string
   schedule_first_unlock_time: string
   schedule_phase: DoorSchedulePhase

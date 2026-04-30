@@ -5,15 +5,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { adminService } from '@/services/adminService'
 import type { AccessLog, DoorAccessMode, DoorEvent, DoorStatus } from '@/types'
 import { formatDateTime, formatTime } from '@/lib/dateTime'
 import { cn } from '@/lib/utils'
 
 type FeedbackTone = 'success' | 'error'
+type ApplyTiming = 'immediate' | 'next_cycle'
 
 const formatDateTimeLabel = (value?: string | null) => (value ? formatDateTime(value, { second: '2-digit' }) : '尚無紀錄')
 const formatTimeOnly = (value?: string | null) => (value ? formatTime(value) : '尚無紀錄')
+const isScheduledAccessMode = (accessMode?: DoorAccessMode | null) =>
+  accessMode === 'first_scan_hold' || accessMode === 'first_scan_flex'
 
 const FeedbackNotice: React.FC<{
   tone: FeedbackTone
@@ -37,6 +49,7 @@ const getDoorStateVariant = (status?: DoorStatus | null) =>
   status?.door_state === 'unlocking' || status?.door_state === 'held_open'
     ? 'success'
     : status?.access_mode === 'always_locked'
+      || (status?.access_mode === 'first_scan_hold' && status?.schedule_phase === 'outside_schedule')
       ? 'warning'
       : 'outline'
 
@@ -56,20 +69,24 @@ const getDoorStateLabel = (status?: DoorStatus | null) => {
   return '目前上鎖'
 }
 
-const getAccessModeLabel = (status?: DoorStatus | null) => {
-  if (status?.access_mode === 'always_locked') {
+const getAccessModeLabel = (accessMode?: DoorAccessMode | null) => {
+  if (accessMode === 'always_locked') {
     return '永久上鎖'
   }
 
-  if (status?.access_mode === 'first_scan_hold') {
-    return '每日首刷常開'
+  if (accessMode === 'first_scan_hold') {
+    return '每日首刷常開（時段外禁止刷卡）'
+  }
+
+  if (accessMode === 'first_scan_flex') {
+    return '每日首刷常開（時段外一般通行）'
   }
 
   return '一般通行'
 }
 
 const getSchedulePhaseLabel = (status?: DoorStatus | null) => {
-  if (status?.access_mode !== 'first_scan_hold') {
+  if (!status || !isScheduledAccessMode(status.access_mode)) {
     return '未啟用'
   }
 
@@ -81,7 +98,11 @@ const getSchedulePhaseLabel = (status?: DoorStatus | null) => {
     return '等待首刷'
   }
 
-  return '上鎖時段'
+  if (status.schedule_phase === 'outside_schedule') {
+    return status.access_mode === 'first_scan_hold' ? '時段外禁止刷卡' : '時段外一般通行'
+  }
+
+  return '未啟用'
 }
 
 const getModeSummary = (status?: DoorStatus | null) => {
@@ -102,7 +123,19 @@ const getModeSummary = (status?: DoorStatus | null) => {
       return `已進入首刷常開等待時段，下一張有效卡會讓門保持解鎖直到 ${status.schedule_lock_time}。`
     }
 
-    return `目前仍在上鎖時段，會在 ${status.schedule_first_unlock_time} 後等待第一張有效卡切換常開。`
+    return `目前為時段外，非指定時間不接受刷卡開門；${status.schedule_first_unlock_time} 後才會等待第一張有效卡切換常開。`
+  }
+
+  if (status.access_mode === 'first_scan_flex') {
+    if (status.schedule_phase === 'held_open') {
+      return `今天已進入常開狀態，預計 ${status.schedule_lock_time} 自動恢復上鎖。`
+    }
+
+    if (status.schedule_phase === 'waiting_for_first_scan') {
+      return `已進入首刷常開等待時段，下一張有效卡會讓門保持解鎖直到 ${status.schedule_lock_time}。`
+    }
+
+    return `目前為時段外，合法卡片仍會短暫開門；${status.schedule_first_unlock_time} 後改為等待第一張有效卡切換常開。`
   }
 
   return `合法卡片會依目前設定短暫開門 ${status.lock_duration_seconds} 秒。`
@@ -114,7 +147,7 @@ const getDoorStateDetail = (status?: DoorStatus | null, unlockCountdownSeconds =
   }
 
   if (status.door_state === 'held_open') {
-    if (status.access_mode === 'first_scan_hold') {
+    if (isScheduledAccessMode(status.access_mode)) {
       return `今日常開進行中，預計 ${status.schedule_lock_time} 自動恢復上鎖。`
     }
     return '門目前維持解鎖中。'
@@ -128,15 +161,27 @@ const getDoorStateDetail = (status?: DoorStatus | null, unlockCountdownSeconds =
     return '目前所有刷卡都不會直接開門。'
   }
 
-  if (status.access_mode === 'first_scan_hold' && status.schedule_phase === 'waiting_for_first_scan') {
+  if (isScheduledAccessMode(status.access_mode) && status.schedule_phase === 'waiting_for_first_scan') {
     return `等待 ${status.schedule_first_unlock_time} 後的第一張有效卡切換為常開。`
   }
 
-  if (status.access_mode === 'first_scan_hold' && status.schedule_phase === 'locked_window') {
-    return `目前為上鎖時段，預計 ${status.schedule_first_unlock_time} 後進入首刷常開等待。`
+  if (status.access_mode === 'first_scan_hold' && status.schedule_phase === 'outside_schedule') {
+    return '目前為時段外，非指定時間不接受刷卡開門。'
+  }
+
+  if (status.access_mode === 'first_scan_flex' && status.schedule_phase === 'outside_schedule') {
+    return `目前為時段外，合法卡片仍可短暫開門 ${status.lock_duration_seconds ?? '...'} 秒。`
   }
 
   return `每次開門會維持 ${status.lock_duration_seconds ?? '...'} 秒`
+}
+
+const getPendingModeSummary = (status?: DoorStatus | null) => {
+  if (!status?.pending_access_mode) {
+    return null
+  }
+
+  return `目前維持 ${getAccessModeLabel(status.access_mode)}，並會在今日 ${status.schedule_lock_time} 上鎖後切換為 ${getAccessModeLabel(status.pending_access_mode)}。`
 }
 
 const getEventLabel = (event: DoorEvent) => {
@@ -150,6 +195,14 @@ const getEventLabel = (event: DoorEvent) => {
 
   if (event.action === 'door_settings_updated') {
     return '模式更新'
+  }
+
+  if (event.action === 'door_settings_scheduled') {
+    return '排程切換'
+  }
+
+  if (event.action === 'door_settings_applied') {
+    return '切換生效'
   }
 
   if (event.action === 'schedule_auto_lock') {
@@ -181,6 +234,7 @@ export const DoorControlPage: React.FC = () => {
   const [scheduleLockTime, setScheduleLockTime] = useState('22:00')
   const [scheduleFirstUnlockTime, setScheduleFirstUnlockTime] = useState('09:00')
   const [modeDirty, setModeDirty] = useState(false)
+  const [isApplyTimingDialogOpen, setIsApplyTimingDialogOpen] = useState(false)
   const [pageError, setPageError] = useState<string | null>(null)
   const [modeFeedback, setModeFeedback] = useState<{ tone: FeedbackTone, message: string } | null>(null)
   const [doorFeedback, setDoorFeedback] = useState<{ tone: FeedbackTone, message: string } | null>(null)
@@ -320,10 +374,11 @@ export const DoorControlPage: React.FC = () => {
     setScheduleLockTime(status.schedule_lock_time || '22:00')
     setScheduleFirstUnlockTime(status.schedule_first_unlock_time || '09:00')
     setModeDirty(false)
+    setIsApplyTimingDialogOpen(false)
     setModeFeedback(null)
   }
 
-  const handleSaveDoorSettings = async () => {
+  const handleSaveDoorSettings = async (applyTiming: ApplyTiming = 'immediate') => {
     try {
       setIsSavingMode(true)
       setModeFeedback(null)
@@ -332,12 +387,14 @@ export const DoorControlPage: React.FC = () => {
         modeForm,
         scheduleLockTime,
         scheduleFirstUnlockTime,
+        applyTiming,
       )
       setModeFeedback({
         tone: 'success',
         message: response.data?.message || '門禁模式已更新',
       })
       setModeDirty(false)
+      setIsApplyTimingDialogOpen(false)
       await loadDoorConsole(true)
     } catch (err: any) {
       console.error('Failed to update door settings:', err)
@@ -350,6 +407,19 @@ export const DoorControlPage: React.FC = () => {
     }
   }
 
+  const handleRequestSaveDoorSettings = () => {
+    if (canDeferModeSwitch) {
+      setIsApplyTimingDialogOpen(true)
+      return
+    }
+
+    void handleSaveDoorSettings('immediate')
+  }
+
+  const handleConfirmApplyTiming = (applyTiming: ApplyTiming) => {
+    void handleSaveDoorSettings(applyTiming)
+  }
+
   const quickScanSuggestions = Array.from(
     new Map(recentLogs.map((log) => [log.rfid_uid, log])).values()
   ).slice(0, 3)
@@ -357,16 +427,31 @@ export const DoorControlPage: React.FC = () => {
   const unlockCountdownSeconds = status?.unlock_until
     ? Math.max(0, Math.ceil((new Date(status.unlock_until).getTime() - Date.now()) / 1000))
     : 0
-  const hasModeChanges = Boolean(
+  const hasScheduleTimeChanges = Boolean(
     status && (
-      modeForm !== status.access_mode
-      || scheduleLockTime !== status.schedule_lock_time
+      scheduleLockTime !== status.schedule_lock_time
       || scheduleFirstUnlockTime !== status.schedule_first_unlock_time
     )
   )
+  const hasModeChanges = Boolean(
+    status && (
+      modeForm !== status.access_mode
+      || hasScheduleTimeChanges
+    )
+  )
+  const canDeferModeSwitch = Boolean(
+    status
+      && status.schedule_phase === 'held_open'
+      && isScheduledAccessMode(status.access_mode)
+      && isScheduledAccessMode(modeForm)
+      && modeForm !== status.access_mode
+      && !hasScheduleTimeChanges
+  )
+  const pendingModeSummary = getPendingModeSummary(status)
   const isDoorOpen = status?.door_state === 'unlocking' || status?.door_state === 'held_open'
   const doorModeOptions: Array<{
     mode: DoorAccessMode
+    eyebrow: string
     title: string
     description: string
     caption: string
@@ -374,6 +459,7 @@ export const DoorControlPage: React.FC = () => {
   }> = [
     {
       mode: 'normal',
+      eyebrow: 'ALWAYS AVAILABLE',
       title: '一般通行',
       description: '適合平常開放節奏，讓合法卡片依設定時間完成通行。',
       caption: '刷卡後短暫開門',
@@ -381,6 +467,7 @@ export const DoorControlPage: React.FC = () => {
     },
     {
       mode: 'always_locked',
+      eyebrow: 'CONTROLLED ACCESS',
       title: '永久上鎖',
       description: '暫停所有刷卡開門，只保留管理端協助現場進出。',
       caption: '僅保留管理端協助',
@@ -388,10 +475,19 @@ export const DoorControlPage: React.FC = () => {
     },
     {
       mode: 'first_scan_hold',
-      title: '每日首刷常開',
-      description: '指定時間後的第一張有效卡，會讓門一路保持解鎖到收門時間。',
-      caption: '首刷後維持解鎖',
+      eyebrow: 'STRICT SCHEDULE',
+      title: '每日首刷常開（時段外禁止刷卡）',
+      description: '指定時間後的第一張有效卡會讓門保持解鎖到收門時間，時段外不接受刷卡開門。',
+      caption: '時段外禁止刷卡',
       icon: <Activity className="h-5 w-5" />,
+    },
+    {
+      mode: 'first_scan_flex',
+      eyebrow: 'FLEX SCHEDULE',
+      title: '每日首刷常開（時段外一般通行）',
+      description: '指定時間後第一張有效卡會切到常開，時段外則維持一般刷卡短暫開門。',
+      caption: '時段外仍可一般通行',
+      icon: <Radio className="h-5 w-5" />,
     },
   ]
 
@@ -409,7 +505,8 @@ export const DoorControlPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <div className="space-y-6">
       <PageHeader
         eyebrow="現場控制"
         title="門禁控制"
@@ -537,7 +634,7 @@ export const DoorControlPage: React.FC = () => {
                 <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">目前生效</p>
-                    <p className="mt-2 break-words text-xl font-semibold text-text-primary">{getAccessModeLabel(status)}</p>
+                    <p className="mt-2 break-words text-xl font-semibold text-text-primary">{getAccessModeLabel(status?.access_mode)}</p>
                   </div>
                   <Badge className="self-start shrink-0 whitespace-nowrap sm:self-auto" variant={getDoorStateVariant(status)}>
                     {getSchedulePhaseLabel(status)}
@@ -546,6 +643,23 @@ export const DoorControlPage: React.FC = () => {
                 <p className="mt-3 break-words text-sm leading-6 text-text-secondary">{getModeSummary(status)}</p>
               </div>
 
+              {pendingModeSummary && (
+                <div className="rounded-[24px] border border-accent/12 bg-accent/[0.06] p-4">
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">待生效切換</p>
+                      <p className="mt-2 break-words text-base font-semibold text-text-primary">
+                        {getAccessModeLabel(status?.pending_access_mode)}
+                      </p>
+                      <p className="mt-2 break-words text-sm leading-6 text-text-secondary">{pendingModeSummary}</p>
+                    </div>
+                    <Badge variant="info" className="self-start shrink-0 whitespace-nowrap">
+                      今日 {status?.schedule_lock_time} 後生效
+                    </Badge>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2.5">
                 {doorModeOptions.map((option) => (
                   <button
@@ -553,17 +667,19 @@ export const DoorControlPage: React.FC = () => {
                     type="button"
                     onClick={() => handleModeSelect(option.mode)}
                     className={cn(
-                      'w-full rounded-[22px] border px-4 py-3.5 text-left transition-all',
+                      'w-full rounded-[26px] border px-5 py-4 text-left transition-all',
                       modeForm === option.mode
-                        ? 'border-text-primary bg-text-primary/[0.03] shadow-[0_16px_34px_-28px_rgba(17,17,17,0.18)]'
-                        : 'border-border/60 bg-white hover:border-text-primary/18 hover:bg-muted/35'
+                        ? 'border-text-primary/18 bg-text-primary/[0.035] shadow-[0_20px_44px_-34px_rgba(17,17,17,0.22)]'
+                        : 'border-border/60 bg-white/96 hover:border-text-primary/14 hover:bg-muted/28'
                     )}
                   >
-                    <div className="flex min-w-0 items-start gap-3.5">
+                    <div className="flex min-w-0 items-start gap-4">
                       <span className={cn(
-                        'inline-flex size-10 shrink-0 items-center justify-center rounded-[16px]',
+                        'inline-flex size-11 shrink-0 items-center justify-center rounded-[18px]',
                         status?.access_mode === option.mode
                           ? 'bg-accent/[0.08] text-accent'
+                          : status?.pending_access_mode === option.mode
+                            ? 'bg-accent/[0.08] text-accent'
                           : modeForm === option.mode
                             ? 'bg-accent/[0.08] text-accent'
                             : 'bg-muted/70 text-text-secondary'
@@ -573,26 +689,35 @@ export const DoorControlPage: React.FC = () => {
 
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <p className="break-words text-base font-semibold text-text-primary">{option.title}</p>
-                          <span
-                            className={cn(
-                              'inline-flex self-start shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em] whitespace-nowrap sm:self-auto',
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                              {option.eyebrow}
+                            </p>
+                            <p className="mt-1 break-words text-base font-semibold text-text-primary">{option.title}</p>
+                          </div>
+                          <Badge
+                            className="self-start shrink-0 whitespace-nowrap sm:self-auto"
+                            variant={
                               status?.access_mode === option.mode
-                                ? 'border border-text-primary/10 bg-text-primary/[0.06] text-text-primary'
-                                : modeForm === option.mode
-                                  ? 'border border-accent/12 bg-accent/[0.08] text-accent'
-                                  : 'border border-border/70 bg-white/82 text-text-secondary'
-                            )}
+                                ? 'default'
+                                : status?.pending_access_mode === option.mode
+                                  ? 'info'
+                                  : modeForm === option.mode
+                                    ? 'info'
+                                    : 'outline'
+                            }
                           >
                             {status?.access_mode === option.mode
                               ? '使用中'
-                              : modeForm === option.mode
-                                ? '待套用'
-                              : '切換'}
-                          </span>
+                              : status?.pending_access_mode === option.mode
+                                ? '待生效'
+                                : modeForm === option.mode
+                                  ? '待套用'
+                                  : '切換'}
+                          </Badge>
                         </div>
                         <p className="mt-2 break-words text-sm leading-6 text-text-secondary">{option.description}</p>
-                        <p className="mt-2 break-words text-xs font-medium tracking-[0.06em] text-text-secondary">{option.caption}</p>
+                        <p className="mt-3 break-words text-xs font-medium tracking-[0.1em] text-text-secondary">{option.caption}</p>
                       </div>
                     </div>
                   </button>
@@ -636,7 +761,9 @@ export const DoorControlPage: React.FC = () => {
                   <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
                     <p className="max-w-md text-xs leading-6 text-text-secondary">
                       {modeForm === 'first_scan_hold'
-                        ? '建議把開始時間設在白天開放時段，並確保它早於每日上鎖時間。'
+                        ? '嚴格排程會在時段外拒絕刷卡，建議把開始時間設在白天開放時段，並確保它早於每日上鎖時間。'
+                        : modeForm === 'first_scan_flex'
+                          ? '彈性排程會在時段外維持一般通行，指定時間內才會等待第一張有效卡切換常開。'
                         : modeForm === 'always_locked'
                           ? '切到永久上鎖後，現場仍可透過左欄的遠端開門處理特殊情況。'
                         : '一般通行模式會依門鎖設定短暫開門，不會進入常開狀態。'}
@@ -655,9 +782,9 @@ export const DoorControlPage: React.FC = () => {
                         className="w-full gap-2 sm:w-auto"
                         loading={isSavingMode}
                         disabled={!hasModeChanges}
-                        onClick={handleSaveDoorSettings}
+                        onClick={handleRequestSaveDoorSettings}
                       >
-                        套用模式
+                        {canDeferModeSwitch ? '選擇生效時機' : '套用模式'}
                       </Button>
                     </div>
                   </div>
@@ -774,7 +901,7 @@ export const DoorControlPage: React.FC = () => {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-[20px] border border-border/60 bg-white/84 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">目前模式</p>
-                  <p className="mt-2 break-words text-lg font-semibold text-text-primary">{getAccessModeLabel(status)}</p>
+                  <p className="mt-2 break-words text-lg font-semibold text-text-primary">{getAccessModeLabel(status?.access_mode)}</p>
                 </div>
                 <div className="rounded-[20px] border border-border/60 bg-white/84 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">排程狀態</p>
@@ -920,6 +1047,54 @@ export const DoorControlPage: React.FC = () => {
           </Card>
         </div>
       </div>
-    </div>
+      </div>
+
+      <Dialog open={isApplyTimingDialogOpen} onOpenChange={setIsApplyTimingDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>選擇模式切換時機</DialogTitle>
+            <DialogDescription>
+              今天的首刷常開已經啟動。你可以立即更新規則，或等今日 {status?.schedule_lock_time} 上鎖後再切換。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody scrollFade={false} className="space-y-4">
+            <div className="rounded-[20px] border border-border/60 bg-muted/36 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">目前模式</p>
+              <p className="mt-2 break-words text-base font-semibold text-text-primary">
+                {getAccessModeLabel(status?.access_mode)}
+              </p>
+            </div>
+
+            <div className="rounded-[20px] border border-accent/12 bg-accent/[0.06] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">切換目標</p>
+              <p className="mt-2 break-words text-base font-semibold text-text-primary">
+                {getAccessModeLabel(modeForm)}
+              </p>
+            </div>
+
+            <p className="text-sm leading-6 text-text-secondary">
+              不論你選哪一種，門都會維持解鎖到今日 {status?.schedule_lock_time}。差別只在於模式要現在更新，還是等收門後再接手。
+            </p>
+          </DialogBody>
+          <DialogFooter className="sm:flex-col sm:items-stretch lg:flex-row lg:items-center">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              loading={isSavingMode}
+              onClick={() => handleConfirmApplyTiming('next_cycle')}
+            >
+              今日上鎖後生效
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              loading={isSavingMode}
+              onClick={() => handleConfirmApplyTiming('immediate')}
+            >
+              立即生效
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
