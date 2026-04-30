@@ -758,8 +758,8 @@ export const DoorControlPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="max-w-md text-xs leading-6 text-text-secondary">
+                  <div className="grid gap-3 border-t border-border/60 pt-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                    <p className="min-w-0 max-w-none text-xs leading-6 text-text-secondary xl:max-w-md">
                       {modeForm === 'first_scan_hold'
                         ? '嚴格排程會在時段外拒絕刷卡，建議把開始時間設在白天開放時段，並確保它早於每日上鎖時間。'
                         : modeForm === 'first_scan_flex'
@@ -769,7 +769,7 @@ export const DoorControlPage: React.FC = () => {
                         : '一般通行模式會依門鎖設定短暫開門，不會進入常開狀態。'}
                     </p>
 
-                    <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap">
+                    <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end xl:w-auto">
                       <Button
                         variant="outline"
                         className="w-full sm:w-auto"
