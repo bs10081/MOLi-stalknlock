@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
@@ -15,17 +16,107 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { adminService } from '@/services/adminService'
-import type { AccessLog, DoorAccessMode, DoorEvent, DoorStatus } from '@/types'
+import type {
+  AccessLog,
+  DoorAccessMode,
+  DoorActiveModeSource,
+  DoorEvent,
+  DoorStatus,
+  DoorWeekdayKey,
+  DoorWeekdayModeOverrides,
+} from '@/types'
 import { formatDateTime, formatTime } from '@/lib/dateTime'
 import { cn } from '@/lib/utils'
 
 type FeedbackTone = 'success' | 'error'
 type ApplyTiming = 'immediate' | 'next_cycle'
+type DoorModeOption = {
+  mode: DoorAccessMode
+  eyebrow: string
+  title: string
+  description: string
+  caption: string
+  icon: React.ReactNode
+}
+
+const WEEKDAY_OPTIONS: Array<{ key: DoorWeekdayKey, label: string }> = [
+  { key: 'mon', label: '週一' },
+  { key: 'tue', label: '週二' },
+  { key: 'wed', label: '週三' },
+  { key: 'thu', label: '週四' },
+  { key: 'fri', label: '週五' },
+  { key: 'sat', label: '週六' },
+  { key: 'sun', label: '週日' },
+]
+const WEEKDAY_WORKDAYS: DoorWeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri']
+const WEEKDAY_WEEKEND_DAYS: DoorWeekdayKey[] = ['sat', 'sun']
+const DEFAULT_WEEKDAY_MODE_OVERRIDES: DoorWeekdayModeOverrides = {
+  mon: null,
+  tue: null,
+  wed: null,
+  thu: null,
+  fri: null,
+  sat: null,
+  sun: null,
+}
 
 const formatDateTimeLabel = (value?: string | null) => (value ? formatDateTime(value, { second: '2-digit' }) : '尚無紀錄')
 const formatTimeOnly = (value?: string | null) => (value ? formatTime(value) : '尚無紀錄')
 const isScheduledAccessMode = (accessMode?: DoorAccessMode | null) =>
   accessMode === 'first_scan_hold' || accessMode === 'first_scan_flex'
+const getDefaultWeekdayModeOverrides = (): DoorWeekdayModeOverrides => ({ ...DEFAULT_WEEKDAY_MODE_OVERRIDES })
+const cloneWeekdayModeOverrides = (
+  overrides?: Partial<DoorWeekdayModeOverrides> | null,
+): DoorWeekdayModeOverrides => ({
+  ...DEFAULT_WEEKDAY_MODE_OVERRIDES,
+  ...(overrides ?? {}),
+})
+const areWeekdayModeOverridesEqual = (
+  left?: Partial<DoorWeekdayModeOverrides> | null,
+  right?: Partial<DoorWeekdayModeOverrides> | null,
+) => WEEKDAY_OPTIONS.every(({ key }) => (left?.[key] ?? null) === (right?.[key] ?? null))
+const countWeekdayOverrides = (overrides?: Partial<DoorWeekdayModeOverrides> | null) =>
+  WEEKDAY_OPTIONS.reduce((count, { key }) => count + ((overrides?.[key] ?? null) ? 1 : 0), 0)
+const getWeekdayLabel = (weekdayKey?: DoorWeekdayKey | null) =>
+  WEEKDAY_OPTIONS.find((option) => option.key === weekdayKey)?.label || '今日'
+const getWeekdayTileStatusLabel = (mode?: DoorAccessMode | null) => (mode ? '覆蓋' : '沿用')
+const getTaipeiWeekdayKey = (): DoorWeekdayKey => {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    timeZone: 'Asia/Taipei',
+  }).format(new Date())
+
+  const weekdayMap: Record<string, DoorWeekdayKey> = {
+    Mon: 'mon',
+    Tue: 'tue',
+    Wed: 'wed',
+    Thu: 'thu',
+    Fri: 'fri',
+    Sat: 'sat',
+    Sun: 'sun',
+  }
+
+  return weekdayMap[weekday] || 'mon'
+}
+const resolveEffectiveMode = (
+  defaultAccessMode?: DoorAccessMode | null,
+  weekdayModeOverrides?: Partial<DoorWeekdayModeOverrides> | null,
+  weekdayKey?: DoorWeekdayKey | null,
+): DoorAccessMode => {
+  if (!defaultAccessMode) {
+    return 'normal'
+  }
+
+  if (!weekdayKey) {
+    return defaultAccessMode
+  }
+
+  return weekdayModeOverrides?.[weekdayKey] ?? defaultAccessMode
+}
+const getModeSourceLabel = (
+  activeModeSource?: DoorActiveModeSource | null,
+  weekdayKey?: DoorWeekdayKey | null,
+) => activeModeSource === 'weekday_override' ? `${getWeekdayLabel(weekdayKey)}規則` : '預設模式'
 
 const FeedbackNotice: React.FC<{
   tone: FeedbackTone
@@ -44,6 +135,79 @@ const FeedbackNotice: React.FC<{
     {message}
   </div>
 )
+
+const ModeOptionCard: React.FC<{
+  option: DoorModeOption
+  selected: boolean
+  badgeLabel: string
+  badgeVariant?: React.ComponentProps<typeof Badge>['variant']
+  onClick: () => void
+  compact?: boolean
+}> = ({ option, selected, badgeLabel, badgeVariant = 'outline', onClick, compact = false }) => {
+  const shouldAccent = selected || badgeVariant !== 'outline'
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'w-full min-w-0 border text-left transition-all',
+        compact ? 'rounded-[20px] px-4 py-3' : 'rounded-[26px] px-5 py-4',
+        selected
+          ? 'border-text-primary/18 bg-text-primary/[0.035] shadow-[0_20px_44px_-34px_rgba(17,17,17,0.22)]'
+          : 'border-border/60 bg-white/96 hover:border-text-primary/14 hover:bg-muted/28',
+      )}
+    >
+      <div className="flex min-w-0 items-start gap-4">
+        <span
+          className={cn(
+            'inline-flex shrink-0 items-center justify-center rounded-[18px]',
+            compact ? 'size-10' : 'size-11',
+            shouldAccent ? 'bg-accent/[0.08] text-accent' : 'bg-muted/70 text-text-secondary',
+          )}
+        >
+          {option.icon}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              {!compact && (
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                  {option.eyebrow}
+                </p>
+              )}
+              <p className={cn(
+                'break-words font-semibold text-text-primary',
+                compact ? 'text-sm' : 'mt-1 text-base',
+              )}
+              >
+                {option.title}
+              </p>
+            </div>
+            <Badge className="self-start shrink-0 whitespace-nowrap sm:self-auto" variant={badgeVariant}>
+              {badgeLabel}
+            </Badge>
+          </div>
+
+          <p
+            className={cn(
+              'break-words text-text-secondary',
+              compact ? 'mt-2 text-xs leading-5' : 'mt-2 text-sm leading-6',
+            )}
+          >
+            {compact ? option.caption : option.description}
+          </p>
+          {!compact && (
+            <p className="mt-3 break-words text-xs font-medium tracking-[0.1em] text-text-secondary">
+              {option.caption}
+            </p>
+          )}
+        </div>
+      </div>
+    </button>
+  )
+}
 
 const getDoorStateVariant = (status?: DoorStatus | null) =>
   status?.door_state === 'unlocking' || status?.door_state === 'held_open'
@@ -181,7 +345,17 @@ const getPendingModeSummary = (status?: DoorStatus | null) => {
     return null
   }
 
-  return `目前維持 ${getAccessModeLabel(status.access_mode)}，並會在今日 ${status.schedule_lock_time} 上鎖後切換為 ${getAccessModeLabel(status.pending_access_mode)}。`
+  const todayWeekdayKey = getTaipeiWeekdayKey()
+  const pendingWeekdayModeOverrides = status.pending_weekday_mode_overrides ?? status.weekday_mode_overrides
+  const pendingEffectiveMode = resolveEffectiveMode(
+    status.pending_access_mode,
+    pendingWeekdayModeOverrides,
+    todayWeekdayKey,
+  )
+  const pendingActiveModeSource: DoorActiveModeSource =
+    pendingWeekdayModeOverrides[todayWeekdayKey] ? 'weekday_override' : 'default'
+
+  return `目前今日規則維持 ${getModeSourceLabel(status.active_mode_source, todayWeekdayKey)} 的 ${getAccessModeLabel(status.access_mode)}，並會在今日 ${status.schedule_lock_time} 上鎖後切換為 ${getModeSourceLabel(pendingActiveModeSource, todayWeekdayKey)} 的 ${getAccessModeLabel(pendingEffectiveMode)}。`
 }
 
 const getEventLabel = (event: DoorEvent) => {
@@ -221,6 +395,7 @@ const getEventLabel = (event: DoorEvent) => {
 }
 
 export const DoorControlPage: React.FC = () => {
+  const todayWeekdayKey = getTaipeiWeekdayKey()
   const [status, setStatus] = useState<DoorStatus | null>(null)
   const [events, setEvents] = useState<DoorEvent[]>([])
   const [recentLogs, setRecentLogs] = useState<AccessLog[]>([])
@@ -231,6 +406,10 @@ export const DoorControlPage: React.FC = () => {
   const [isSavingMode, setIsSavingMode] = useState(false)
   const [scanInput, setScanInput] = useState('')
   const [modeForm, setModeForm] = useState<DoorAccessMode>('normal')
+  const [weekdayOverridesForm, setWeekdayOverridesForm] = useState<DoorWeekdayModeOverrides>(
+    getDefaultWeekdayModeOverrides(),
+  )
+  const [selectedWeekday, setSelectedWeekday] = useState<DoorWeekdayKey>(todayWeekdayKey)
   const [scheduleLockTime, setScheduleLockTime] = useState('22:00')
   const [scheduleFirstUnlockTime, setScheduleFirstUnlockTime] = useState('09:00')
   const [modeDirty, setModeDirty] = useState(false)
@@ -296,7 +475,8 @@ export const DoorControlPage: React.FC = () => {
       return
     }
 
-    setModeForm(status.access_mode)
+    setModeForm(status.default_access_mode)
+    setWeekdayOverridesForm(cloneWeekdayModeOverrides(status.weekday_mode_overrides))
     setScheduleLockTime(status.schedule_lock_time || '22:00')
     setScheduleFirstUnlockTime(status.schedule_first_unlock_time || '09:00')
   }, [status, modeDirty])
@@ -365,12 +545,52 @@ export const DoorControlPage: React.FC = () => {
     setModeFeedback(null)
   }
 
+  const handleWeekdayOverrideToggle = (weekdayKey: DoorWeekdayKey, enabled: boolean) => {
+    setWeekdayOverridesForm((currentOverrides) => ({
+      ...currentOverrides,
+      [weekdayKey]: enabled ? currentOverrides[weekdayKey] ?? modeForm : null,
+    }))
+    setModeDirty(true)
+    setModeFeedback(null)
+  }
+
+  const handleWeekdayModeSelect = (weekdayKey: DoorWeekdayKey, nextMode: DoorAccessMode) => {
+    setWeekdayOverridesForm((currentOverrides) => ({
+      ...currentOverrides,
+      [weekdayKey]: nextMode,
+    }))
+    setModeDirty(true)
+    setModeFeedback(null)
+  }
+
+  const handleCopySelectedWeekdayToDays = (targetWeekdays: DoorWeekdayKey[]) => {
+    setWeekdayOverridesForm((currentOverrides) => {
+      const templateMode = currentOverrides[selectedWeekday] ?? null
+      const nextOverrides = { ...currentOverrides }
+
+      targetWeekdays.forEach((weekdayKey) => {
+        nextOverrides[weekdayKey] = templateMode
+      })
+
+      return nextOverrides
+    })
+    setModeDirty(true)
+    setModeFeedback(null)
+  }
+
+  const handleClearAllWeekdayOverrides = () => {
+    setWeekdayOverridesForm(getDefaultWeekdayModeOverrides())
+    setModeDirty(true)
+    setModeFeedback(null)
+  }
+
   const resetModeForm = () => {
     if (!status) {
       return
     }
 
-    setModeForm(status.access_mode)
+    setModeForm(status.default_access_mode)
+    setWeekdayOverridesForm(cloneWeekdayModeOverrides(status.weekday_mode_overrides))
     setScheduleLockTime(status.schedule_lock_time || '22:00')
     setScheduleFirstUnlockTime(status.schedule_first_unlock_time || '09:00')
     setModeDirty(false)
@@ -385,6 +605,7 @@ export const DoorControlPage: React.FC = () => {
       setPageError(null)
       const response = await adminService.updateDoorSettings(
         modeForm,
+        weekdayOverridesForm,
         scheduleLockTime,
         scheduleFirstUnlockTime,
         applyTiming,
@@ -424,6 +645,7 @@ export const DoorControlPage: React.FC = () => {
     new Map(recentLogs.map((log) => [log.rfid_uid, log])).values()
   ).slice(0, 3)
 
+  const todaySourceLabel = getModeSourceLabel(status?.active_mode_source, todayWeekdayKey)
   const unlockCountdownSeconds = status?.unlock_until
     ? Math.max(0, Math.ceil((new Date(status.unlock_until).getTime() - Date.now()) / 1000))
     : 0
@@ -433,9 +655,18 @@ export const DoorControlPage: React.FC = () => {
       || scheduleFirstUnlockTime !== status.schedule_first_unlock_time
     )
   )
+  const hasDefaultModeChanges = Boolean(status && modeForm !== status.default_access_mode)
+  const hasWeekdayModeChanges = Boolean(
+    status && !areWeekdayModeOverridesEqual(weekdayOverridesForm, status.weekday_mode_overrides)
+  )
+  const nextEffectiveMode = resolveEffectiveMode(modeForm, weekdayOverridesForm, todayWeekdayKey)
+  const nextActiveModeSource: DoorActiveModeSource =
+    weekdayOverridesForm[todayWeekdayKey] ? 'weekday_override' : 'default'
+  const nextSourceLabel = getModeSourceLabel(nextActiveModeSource, todayWeekdayKey)
   const hasModeChanges = Boolean(
     status && (
-      modeForm !== status.access_mode
+      hasDefaultModeChanges
+      || hasWeekdayModeChanges
       || hasScheduleTimeChanges
     )
   )
@@ -443,20 +674,68 @@ export const DoorControlPage: React.FC = () => {
     status
       && status.schedule_phase === 'held_open'
       && isScheduledAccessMode(status.access_mode)
-      && isScheduledAccessMode(modeForm)
-      && modeForm !== status.access_mode
+      && isScheduledAccessMode(nextEffectiveMode)
+      && nextEffectiveMode !== status.access_mode
       && !hasScheduleTimeChanges
   )
   const pendingModeSummary = getPendingModeSummary(status)
+  const pendingWeekdayModeOverrides = status?.pending_weekday_mode_overrides ?? status?.weekday_mode_overrides
+  const pendingEffectiveMode = status?.pending_access_mode
+    ? resolveEffectiveMode(status.pending_access_mode, pendingWeekdayModeOverrides, todayWeekdayKey)
+    : null
+  const pendingActiveModeSource: DoorActiveModeSource | null = status?.pending_access_mode
+    ? pendingWeekdayModeOverrides?.[todayWeekdayKey]
+      ? 'weekday_override'
+      : 'default'
+    : null
+  const hasPendingDefaultModeChange = Boolean(
+    status?.pending_access_mode && status.pending_access_mode !== status.default_access_mode
+  )
+  const selectedWeekdayLabel = getWeekdayLabel(selectedWeekday)
+  const selectedWeekdayFormOverrideMode = weekdayOverridesForm[selectedWeekday]
+  const selectedWeekdayCurrentOverrideMode = status?.weekday_mode_overrides?.[selectedWeekday] ?? null
+  const selectedWeekdayPendingOverrideMode = status?.pending_access_mode
+    ? pendingWeekdayModeOverrides?.[selectedWeekday] ?? null
+    : null
+  const selectedWeekdayHasPendingExplicitChange = Boolean(
+    status?.pending_access_mode
+      && (selectedWeekdayPendingOverrideMode ?? null) !== (selectedWeekdayCurrentOverrideMode ?? null)
+  )
+  const selectedWeekdayHasPendingInheritedModeChange = Boolean(
+    status?.pending_access_mode
+      && !selectedWeekdayHasPendingExplicitChange
+      && selectedWeekdayCurrentOverrideMode == null
+      && selectedWeekdayPendingOverrideMode == null
+      && status.pending_access_mode !== status.default_access_mode
+  )
+  const selectedWeekdaySummary = selectedWeekdayFormOverrideMode
+    ? `${selectedWeekdayLabel} 目前有獨立規則，會使用 ${getAccessModeLabel(selectedWeekdayFormOverrideMode)}；其他星期維持各自原本設定。`
+    : `${selectedWeekdayLabel} 目前沒有獨立規則，會直接沿用上方的預設模式 ${getAccessModeLabel(modeForm)}。`
+  const selectedWeekdayBulkActionSummary = selectedWeekdayFormOverrideMode
+    ? `把 ${selectedWeekdayLabel} 目前的獨立規則複製到其他日期。`
+    : `把 ${selectedWeekdayLabel} 目前「沿用預設模式」的狀態複製到其他日期，目標日期的獨立規則會被清除。`
+  const selectedWeekdayPendingNote = (() => {
+    if (!status?.pending_access_mode) {
+      return null
+    }
+
+    if (selectedWeekdayHasPendingExplicitChange) {
+      if (selectedWeekdayPendingOverrideMode) {
+        return `今日 ${status.schedule_lock_time} 上鎖後，${selectedWeekdayLabel} 會改為覆蓋 ${getAccessModeLabel(selectedWeekdayPendingOverrideMode)}。`
+      }
+
+      return `今日 ${status.schedule_lock_time} 上鎖後，${selectedWeekdayLabel} 會取消覆蓋，改為沿用預設模式 ${getAccessModeLabel(status.pending_access_mode)}。`
+    }
+
+    if (selectedWeekdayHasPendingInheritedModeChange) {
+      return `目前沿用預設模式 ${getAccessModeLabel(status.default_access_mode)}；今日 ${status.schedule_lock_time} 上鎖後會改為沿用預設模式 ${getAccessModeLabel(status.pending_access_mode)}。`
+    }
+
+    return null
+  })()
+  const weekdayOverrideCount = countWeekdayOverrides(weekdayOverridesForm)
   const isDoorOpen = status?.door_state === 'unlocking' || status?.door_state === 'held_open'
-  const doorModeOptions: Array<{
-    mode: DoorAccessMode
-    eyebrow: string
-    title: string
-    description: string
-    caption: string
-    icon: React.ReactNode
-  }> = [
+  const doorModeOptions: DoorModeOption[] = [
     {
       mode: 'normal',
       eyebrow: 'ALWAYS AVAILABLE',
@@ -523,10 +802,11 @@ export const DoorControlPage: React.FC = () => {
 
       {pageError && <FeedbackNotice tone="error" message={pageError} />}
 
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(320px,0.98fr)] xl:items-start">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1.04fr)_minmax(360px,0.96fr)] xl:items-start">
+        <div className="order-1 min-w-0 space-y-6">
         <Card
           variant="hero"
-          className="order-1 min-w-0 overflow-hidden xl:order-none xl:col-start-1 xl:row-start-1 xl:self-start"
+          className="min-w-0 overflow-hidden"
         >
           <CardHeader className="pb-4">
             <CardTitle>即時門況</CardTitle>
@@ -623,275 +903,6 @@ export const DoorControlPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <div className="order-2 min-w-0 space-y-6 self-start xl:order-none xl:col-start-2 xl:row-span-2 xl:row-start-1">
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle>通行模式</CardTitle>
-              <CardDescription>依現場的開放方式切換規則，需要時也能快速收回到更保守的門禁策略。</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-[24px] border border-border/60 bg-muted/28 p-4">
-                <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">目前生效</p>
-                    <p className="mt-2 break-words text-xl font-semibold text-text-primary">{getAccessModeLabel(status?.access_mode)}</p>
-                  </div>
-                  <Badge className="self-start shrink-0 whitespace-nowrap sm:self-auto" variant={getDoorStateVariant(status)}>
-                    {getSchedulePhaseLabel(status)}
-                  </Badge>
-                </div>
-                <p className="mt-3 break-words text-sm leading-6 text-text-secondary">{getModeSummary(status)}</p>
-              </div>
-
-              {pendingModeSummary && (
-                <div className="rounded-[24px] border border-accent/12 bg-accent/[0.06] p-4">
-                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">待生效切換</p>
-                      <p className="mt-2 break-words text-base font-semibold text-text-primary">
-                        {getAccessModeLabel(status?.pending_access_mode)}
-                      </p>
-                      <p className="mt-2 break-words text-sm leading-6 text-text-secondary">{pendingModeSummary}</p>
-                    </div>
-                    <Badge variant="info" className="self-start shrink-0 whitespace-nowrap">
-                      今日 {status?.schedule_lock_time} 後生效
-                    </Badge>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2.5">
-                {doorModeOptions.map((option) => (
-                  <button
-                    key={option.mode}
-                    type="button"
-                    onClick={() => handleModeSelect(option.mode)}
-                    className={cn(
-                      'w-full rounded-[26px] border px-5 py-4 text-left transition-all',
-                      modeForm === option.mode
-                        ? 'border-text-primary/18 bg-text-primary/[0.035] shadow-[0_20px_44px_-34px_rgba(17,17,17,0.22)]'
-                        : 'border-border/60 bg-white/96 hover:border-text-primary/14 hover:bg-muted/28'
-                    )}
-                  >
-                    <div className="flex min-w-0 items-start gap-4">
-                      <span className={cn(
-                        'inline-flex size-11 shrink-0 items-center justify-center rounded-[18px]',
-                        status?.access_mode === option.mode
-                          ? 'bg-accent/[0.08] text-accent'
-                          : status?.pending_access_mode === option.mode
-                            ? 'bg-accent/[0.08] text-accent'
-                          : modeForm === option.mode
-                            ? 'bg-accent/[0.08] text-accent'
-                            : 'bg-muted/70 text-text-secondary'
-                      )}>
-                        {option.icon}
-                      </span>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
-                              {option.eyebrow}
-                            </p>
-                            <p className="mt-1 break-words text-base font-semibold text-text-primary">{option.title}</p>
-                          </div>
-                          <Badge
-                            className="self-start shrink-0 whitespace-nowrap sm:self-auto"
-                            variant={
-                              status?.access_mode === option.mode
-                                ? 'default'
-                                : status?.pending_access_mode === option.mode
-                                  ? 'info'
-                                  : modeForm === option.mode
-                                    ? 'info'
-                                    : 'outline'
-                            }
-                          >
-                            {status?.access_mode === option.mode
-                              ? '使用中'
-                              : status?.pending_access_mode === option.mode
-                                ? '待生效'
-                                : modeForm === option.mode
-                                  ? '待套用'
-                                  : '切換'}
-                          </Badge>
-                        </div>
-                        <p className="mt-2 break-words text-sm leading-6 text-text-secondary">{option.description}</p>
-                        <p className="mt-3 break-words text-xs font-medium tracking-[0.1em] text-text-secondary">{option.caption}</p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {modeFeedback && (
-                <FeedbackNotice tone={modeFeedback.tone} message={modeFeedback.message} />
-              )}
-
-              <div className="rounded-[24px] border border-border/60 bg-white p-4">
-                <div className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-text-primary">每日上鎖時間</label>
-                      <Input
-                        nativeInput
-                        type="time"
-                        value={scheduleLockTime}
-                        onChange={(event) => {
-                          setScheduleLockTime(event.target.value)
-                          setModeDirty(true)
-                        }}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-text-primary">首刷常開開始時間</label>
-                      <Input
-                        nativeInput
-                        type="time"
-                        value={scheduleFirstUnlockTime}
-                        onChange={(event) => {
-                          setScheduleFirstUnlockTime(event.target.value)
-                          setModeDirty(true)
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 border-t border-border/60 pt-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-                    <p className="min-w-0 max-w-none text-xs leading-6 text-text-secondary xl:max-w-md">
-                      {modeForm === 'first_scan_hold'
-                        ? '嚴格排程會在時段外拒絕刷卡，建議把開始時間設在白天開放時段，並確保它早於每日上鎖時間。'
-                        : modeForm === 'first_scan_flex'
-                          ? '彈性排程會在時段外維持一般通行，指定時間內才會等待第一張有效卡切換常開。'
-                        : modeForm === 'always_locked'
-                          ? '切到永久上鎖後，現場仍可透過左欄的遠端開門處理特殊情況。'
-                        : '一般通行模式會依門鎖設定短暫開門，不會進入常開狀態。'}
-                    </p>
-
-                    <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end xl:w-auto">
-                      <Button
-                        variant="outline"
-                        className="w-full sm:w-auto"
-                        disabled={!hasModeChanges}
-                        onClick={resetModeForm}
-                      >
-                        還原
-                      </Button>
-                      <Button
-                        className="w-full gap-2 sm:w-auto"
-                        loading={isSavingMode}
-                        disabled={!hasModeChanges}
-                        onClick={handleRequestSaveDoorSettings}
-                      >
-                        {canDeferModeSwitch ? '選擇生效時機' : '套用模式'}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card variant="subtle">
-            <CardHeader className="pb-3">
-              <CardTitle>最近控制事件</CardTitle>
-              <CardDescription>回看協助開門、模式切換與測試操作，交接現場時會更有脈絡。</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {events.length > 0 ? (
-                <div className="space-y-2.5">
-                  {events.map((event) => (
-                    <div key={event.id} className="rounded-[20px] border border-border/60 bg-white/82 px-4 py-3">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant={event.action === 'remote_unlock' ? 'warning' : 'info'}>
-                              {getEventLabel(event)}
-                            </Badge>
-                            <Badge variant={event.result === 'accepted' ? 'success' : 'error'}>
-                              {event.result}
-                            </Badge>
-                          </div>
-                          <p className="break-words font-medium text-text-primary">{event.description || getEventLabel(event)}</p>
-                          <p className="break-words text-xs text-text-secondary">操作者：{event.admin_name}</p>
-                        </div>
-                        <div className="min-w-0 self-start text-left text-xs text-text-secondary sm:self-auto sm:text-right">
-                          <p className="break-words">{formatDateTimeLabel(event.created_at)}</p>
-                          <p className="mt-1 break-words uppercase tracking-[0.12em]">{event.source}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-8 text-center text-text-secondary">目前尚無門禁控制事件</div>
-              )}
-            </CardContent>
-          </Card>
-
-          {status?.can_simulate_scan && (
-            <Card variant="outline">
-              <CardHeader className="pb-3">
-                <CardTitle>測試刷卡</CardTitle>
-                <CardDescription>演練卡片流程時，先在這裡快速驗證門禁反應與紀錄是否正常。</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-text-primary">卡片編號</label>
-                  <Input
-                    nativeInput
-                    value={scanInput}
-                    placeholder="例如 TEST123456"
-                    onChange={(event) => setScanInput(event.target.value)}
-                  />
-                  <p className="text-xs text-text-secondary">
-                    可輸入已綁定卡片確認通行，也可輸入未綁定卡片檢查拒絕流程。
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                  <Button
-                    className="w-full gap-2 sm:w-auto"
-                    loading={isSimulating}
-                    onClick={() => void handleSimulateScan()}
-                  >
-                    <ScanLine className="h-4.5 w-4.5" />
-                    模擬刷卡
-                  </Button>
-                  <Button className="w-full sm:w-auto" variant="outline" onClick={() => setScanInput('')}>
-                    清除
-                  </Button>
-                </div>
-
-                {scanFeedback && (
-                  <FeedbackNotice tone={scanFeedback.tone} message={scanFeedback.message} />
-                )}
-
-                {quickScanSuggestions.length > 0 && (
-                  <div className="space-y-3 rounded-[20px] border border-border/60 bg-muted/40 p-4">
-                    <p className="text-sm font-medium text-text-primary">快速帶入最近使用的卡片</p>
-                    <div className="flex flex-wrap gap-2">
-                      {quickScanSuggestions.map((log) => (
-                        <Button
-                          key={log.id}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setScanInput(log.rfid_uid)}
-                        >
-                          {log.user_name}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-        </div>
-
-        <div className="order-3 min-w-0 space-y-6 xl:order-none xl:col-start-1 xl:row-start-2">
           <Card variant="subtle">
             <CardHeader className="pb-3">
               <CardTitle>今日通行節奏</CardTitle>
@@ -900,17 +911,19 @@ export const DoorControlPage: React.FC = () => {
             <CardContent className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-[20px] border border-border/60 bg-white/84 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">目前模式</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">今日模式</p>
                   <p className="mt-2 break-words text-lg font-semibold text-text-primary">{getAccessModeLabel(status?.access_mode)}</p>
                 </div>
                 <div className="rounded-[20px] border border-border/60 bg-white/84 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">排程狀態</p>
-                  <p className="mt-2 break-words text-lg font-semibold text-text-primary">{getSchedulePhaseLabel(status)}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">來源</p>
+                  <p className="mt-2 break-words text-lg font-semibold text-text-primary">{todaySourceLabel}</p>
                 </div>
               </div>
 
               <div className="rounded-[22px] border border-border/60 bg-white/84 p-4">
                 <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">預設模式 {getAccessModeLabel(status?.default_access_mode)}</Badge>
+                  <Badge variant="outline">排程狀態 {getSchedulePhaseLabel(status)}</Badge>
                   <Badge variant="outline">首刷常開開始 {status?.schedule_first_unlock_time || '09:00'}</Badge>
                   <Badge variant="outline">每日上鎖 {status?.schedule_lock_time || '22:00'}</Badge>
                 </div>
@@ -1046,6 +1059,455 @@ export const DoorControlPage: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+
+        <div className="order-2 min-w-0 space-y-6 self-start">
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle>通行模式</CardTitle>
+              <CardDescription>依現場的開放方式切換規則，需要時也能快速收回到更保守的門禁策略。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-[24px] border border-border/60 bg-muted/28 p-4">
+                <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">目前生效</p>
+                    <p className="mt-2 break-words text-xl font-semibold text-text-primary">{getAccessModeLabel(status?.access_mode)}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className="self-start shrink-0 whitespace-nowrap sm:self-auto" variant={getDoorStateVariant(status)}>
+                      {getSchedulePhaseLabel(status)}
+                    </Badge>
+                    <Badge className="self-start shrink-0 whitespace-nowrap sm:self-auto" variant="outline">
+                      今日來自：{todaySourceLabel}
+                    </Badge>
+                  </div>
+                </div>
+                <p className="mt-3 break-words text-sm leading-6 text-text-secondary">{getModeSummary(status)}</p>
+              </div>
+
+              {pendingModeSummary && (
+                <div className="rounded-[24px] border border-accent/12 bg-accent/[0.06] p-4">
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">待生效切換</p>
+                      <p className="mt-2 break-words text-base font-semibold text-text-primary">
+                        {getAccessModeLabel(pendingEffectiveMode)}
+                      </p>
+                      <p className="mt-2 break-words text-sm leading-6 text-text-secondary">{pendingModeSummary}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="info" className="self-start shrink-0 whitespace-nowrap">
+                        今日 {status?.schedule_lock_time} 後生效
+                      </Badge>
+                      {pendingActiveModeSource && (
+                        <Badge variant="outline" className="self-start shrink-0 whitespace-nowrap">
+                          套用後：{getModeSourceLabel(pendingActiveModeSource, todayWeekdayKey)}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-[24px] border border-border/60 bg-white p-4">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">預設模式</p>
+                    <p className="mt-1 break-words text-sm leading-6 text-text-secondary">
+                      所有未指定星期的日子都會沿用這個 fallback mode，再由下方每週規則覆蓋需要的日期。
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="self-start shrink-0 whitespace-nowrap">
+                    其餘日期沿用
+                  </Badge>
+                </div>
+
+                <div className="mt-4 space-y-2.5">
+                  {doorModeOptions.map((option) => (
+                    <ModeOptionCard
+                      key={option.mode}
+                      option={option}
+                      selected={modeForm === option.mode}
+                      badgeVariant={
+                        status?.default_access_mode === option.mode
+                          ? 'default'
+                          : hasPendingDefaultModeChange && status?.pending_access_mode === option.mode
+                            ? 'info'
+                            : modeForm === option.mode
+                              ? 'info'
+                              : 'outline'
+                      }
+                      badgeLabel={
+                        status?.default_access_mode === option.mode
+                          ? '預設中'
+                          : hasPendingDefaultModeChange && status?.pending_access_mode === option.mode
+                            ? '待生效'
+                            : modeForm === option.mode
+                              ? '待套用'
+                              : '設為預設'
+                      }
+                      onClick={() => handleModeSelect(option.mode)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[24px] border border-border/60 bg-muted/22 p-4">
+                <div className="flex min-w-0 flex-col gap-4">
+                  <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">每週規則</p>
+                      <p className="mt-1 break-words text-sm leading-6 text-text-secondary">
+                        只替需要的星期覆蓋預設模式；未設定的日子會沿用上面的預設模式。
+                      </p>
+                    </div>
+                    {status?.pending_access_mode && (
+                      <Badge variant="outline" className="self-start shrink-0 whitespace-nowrap">
+                        今日 {status.schedule_lock_time} 後有待生效規則
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">今天：{getWeekdayLabel(todayWeekdayKey)}</Badge>
+                    <Badge variant="outline">已覆蓋 {weekdayOverrideCount}/7 天</Badge>
+                  </div>
+
+                  <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-3 2xl:grid-cols-4">
+                    {WEEKDAY_OPTIONS.map((weekday) => {
+                      const currentOverrideMode = status?.weekday_mode_overrides?.[weekday.key] ?? null
+                      const formOverrideMode = weekdayOverridesForm[weekday.key]
+                      const pendingOverrideMode = status?.pending_access_mode
+                        ? status.pending_weekday_mode_overrides?.[weekday.key] ?? null
+                        : null
+                      const isSelected = selectedWeekday === weekday.key
+                      const isToday = weekday.key === todayWeekdayKey
+                      const hasPendingExplicitChange = Boolean(
+                        status?.pending_access_mode
+                          && (pendingOverrideMode ?? null) !== (currentOverrideMode ?? null)
+                      )
+
+                      return (
+                        <button
+                          key={weekday.key}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => setSelectedWeekday(weekday.key)}
+                          className={cn(
+                            'min-w-0 rounded-[20px] border p-3 text-left transition-all',
+                            isSelected
+                              ? 'border-text-primary/18 bg-text-primary/[0.05] shadow-[0_18px_40px_-34px_rgba(17,17,17,0.22)]'
+                              : 'border-border/60 bg-white/88 hover:border-text-primary/14 hover:bg-white',
+                          )}
+                        >
+                          <div className="flex min-w-0 flex-col gap-2">
+                            <div className="flex min-w-0 items-start justify-between gap-2">
+                              <span className="min-w-0 text-sm font-semibold text-text-primary">{weekday.label}</span>
+                              {isToday && (
+                                <span className="shrink-0 whitespace-nowrap rounded-full bg-accent/[0.08] px-2 py-1 text-[11px] font-medium text-accent">
+                                  今天
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                              <span
+                                className={cn(
+                                  'shrink-0 rounded-full px-2 py-1 text-[11px] font-medium',
+                                  formOverrideMode
+                                    ? 'bg-text-primary/[0.08] text-text-primary'
+                                    : 'bg-muted/70 text-text-secondary',
+                                )}
+                              >
+                                {getWeekdayTileStatusLabel(formOverrideMode)}
+                              </span>
+                              {hasPendingExplicitChange && (
+                                <span className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-700">
+                                  待生效
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="rounded-[24px] border border-border/60 bg-white/90 p-4 sm:p-5">
+                    <div className="flex min-w-0 flex-col gap-4">
+                      <div className="flex min-w-0 flex-col gap-3 2xl:grid 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-start">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="break-words text-base font-semibold text-text-primary">{selectedWeekdayLabel}</p>
+                            {selectedWeekday === todayWeekdayKey && <Badge variant="info">今天</Badge>}
+                            <Badge variant={selectedWeekdayFormOverrideMode ? 'default' : 'outline'}>
+                              {selectedWeekdayFormOverrideMode ? '已覆蓋' : '沿用預設模式'}
+                            </Badge>
+                            {selectedWeekdayHasPendingExplicitChange && <Badge variant="warning">待生效</Badge>}
+                          </div>
+                          <p className="mt-2 break-words text-sm leading-6 text-text-secondary">
+                            {selectedWeekdaySummary}
+                          </p>
+                          {selectedWeekdayPendingNote && (
+                            <div className="mt-3 rounded-[18px] border border-accent/12 bg-accent/[0.06] px-3 py-3">
+                              <p className="break-words text-sm leading-6 text-text-secondary">
+                                {selectedWeekdayPendingNote}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        <label className="flex items-center gap-3 self-start rounded-full border border-border/70 bg-muted/34 px-3 py-2 text-sm text-text-primary">
+                          <Checkbox
+                            checked={Boolean(selectedWeekdayFormOverrideMode)}
+                            onChange={(checked) => handleWeekdayOverrideToggle(selectedWeekday, checked)}
+                          />
+                          啟用覆蓋
+                        </label>
+                      </div>
+
+                      <div className="flex min-w-0 flex-col gap-3 rounded-[20px] border border-border/60 bg-muted/28 p-4">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">快速套用</p>
+                          <p className="mt-1 break-words text-sm leading-6 text-text-secondary">
+                            {selectedWeekdayBulkActionSummary}
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            onClick={() => handleCopySelectedWeekdayToDays(WEEKDAY_WORKDAYS)}
+                          >
+                            套用到平日
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            onClick={() => handleCopySelectedWeekdayToDays(WEEKDAY_WEEKEND_DAYS)}
+                          >
+                            套用到週末
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            onClick={handleClearAllWeekdayOverrides}
+                          >
+                            清除全部覆蓋
+                          </Button>
+                        </div>
+                      </div>
+
+                      {selectedWeekdayFormOverrideMode ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {doorModeOptions.map((option) => (
+                            <ModeOptionCard
+                              key={`${selectedWeekday}-${option.mode}`}
+                              option={option}
+                              compact
+                              selected={selectedWeekdayFormOverrideMode === option.mode}
+                              badgeVariant={
+                                selectedWeekdayCurrentOverrideMode === option.mode
+                                  ? 'default'
+                                  : selectedWeekdayPendingOverrideMode === option.mode
+                                    ? 'info'
+                                    : selectedWeekdayFormOverrideMode === option.mode
+                                      ? 'info'
+                                      : 'outline'
+                              }
+                              badgeLabel={
+                                selectedWeekdayCurrentOverrideMode === option.mode
+                                  ? '使用中'
+                                  : selectedWeekdayPendingOverrideMode === option.mode
+                                    ? '待生效'
+                                    : selectedWeekdayFormOverrideMode === option.mode
+                                      ? '待套用'
+                                      : '套用此模式'
+                              }
+                              onClick={() => handleWeekdayModeSelect(selectedWeekday, option.mode)}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-[20px] border border-dashed border-border/70 bg-muted/32 p-4">
+                          <p className="break-words text-sm leading-6 text-text-secondary">
+                            這一天目前會沿用預設模式 {getAccessModeLabel(modeForm)}。如果你想讓 {selectedWeekdayLabel} 走獨立規則，再打開上方的覆蓋開關。
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {modeFeedback && (
+                <FeedbackNotice tone={modeFeedback.tone} message={modeFeedback.message} />
+              )}
+
+              <div className="rounded-[24px] border border-border/60 bg-white p-4">
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-text-primary">每日上鎖時間</label>
+                      <Input
+                        nativeInput
+                        type="time"
+                        value={scheduleLockTime}
+                        onChange={(event) => {
+                          setScheduleLockTime(event.target.value)
+                          setModeDirty(true)
+                        }}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-text-primary">首刷常開開始時間</label>
+                      <Input
+                        nativeInput
+                        type="time"
+                        value={scheduleFirstUnlockTime}
+                        onChange={(event) => {
+                          setScheduleFirstUnlockTime(event.target.value)
+                          setModeDirty(true)
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 border-t border-border/60 pt-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                    <p className="min-w-0 max-w-none text-xs leading-6 text-text-secondary xl:max-w-md">
+                      {modeForm === 'first_scan_hold'
+                        ? '共用時段會同時套用到預設模式與每週覆蓋。嚴格排程會在時段外拒絕刷卡，建議把開始時間設在白天開放時段，並確保它早於每日上鎖時間。'
+                        : modeForm === 'first_scan_flex'
+                          ? '共用時段會同時套用到預設模式與每週覆蓋。彈性排程會在時段外維持一般通行，指定時間內才會等待第一張有效卡切換常開。'
+                        : modeForm === 'always_locked'
+                          ? '共用時段仍會保留給有設定首刷常開的星期使用；切到永久上鎖後，現場仍可透過左欄的遠端開門處理特殊情況。'
+                        : '共用時段會套用到所有星期覆蓋。一般通行模式會依門鎖設定短暫開門，不會進入常開狀態。'}
+                    </p>
+
+                    <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end xl:w-auto">
+                      <Button
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        disabled={!hasModeChanges}
+                        onClick={resetModeForm}
+                      >
+                        還原
+                      </Button>
+                      <Button
+                        className="w-full gap-2 sm:w-auto"
+                        loading={isSavingMode}
+                        disabled={!hasModeChanges}
+                        onClick={handleRequestSaveDoorSettings}
+                      >
+                        {canDeferModeSwitch ? '選擇生效時機' : '套用模式'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card variant="subtle">
+            <CardHeader className="pb-3">
+              <CardTitle>最近控制事件</CardTitle>
+              <CardDescription>回看協助開門、模式切換與測試操作，交接現場時會更有脈絡。</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {events.length > 0 ? (
+                <div className="space-y-2.5">
+                  {events.map((event) => (
+                    <div key={event.id} className="rounded-[20px] border border-border/60 bg-white/82 px-4 py-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={event.action === 'remote_unlock' ? 'warning' : 'info'}>
+                              {getEventLabel(event)}
+                            </Badge>
+                            <Badge variant={event.result === 'accepted' ? 'success' : 'error'}>
+                              {event.result}
+                            </Badge>
+                          </div>
+                          <p className="break-words font-medium text-text-primary">{event.description || getEventLabel(event)}</p>
+                          <p className="break-words text-xs text-text-secondary">操作者：{event.admin_name}</p>
+                        </div>
+                        <div className="min-w-0 self-start text-left text-xs text-text-secondary sm:self-auto sm:text-right">
+                          <p className="break-words">{formatDateTimeLabel(event.created_at)}</p>
+                          <p className="mt-1 break-words uppercase tracking-[0.12em]">{event.source}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center text-text-secondary">目前尚無門禁控制事件</div>
+              )}
+            </CardContent>
+          </Card>
+
+          {status?.can_simulate_scan && (
+            <Card variant="outline">
+              <CardHeader className="pb-3">
+                <CardTitle>測試刷卡</CardTitle>
+                <CardDescription>演練卡片流程時，先在這裡快速驗證門禁反應與紀錄是否正常。</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-text-primary">卡片編號</label>
+                  <Input
+                    nativeInput
+                    value={scanInput}
+                    placeholder="例如 TEST123456"
+                    onChange={(event) => setScanInput(event.target.value)}
+                  />
+                  <p className="text-xs text-text-secondary">
+                    可輸入已綁定卡片確認通行，也可輸入未綁定卡片檢查拒絕流程。
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  <Button
+                    className="w-full gap-2 sm:w-auto"
+                    loading={isSimulating}
+                    onClick={() => void handleSimulateScan()}
+                  >
+                    <ScanLine className="h-4.5 w-4.5" />
+                    模擬刷卡
+                  </Button>
+                  <Button className="w-full sm:w-auto" variant="outline" onClick={() => setScanInput('')}>
+                    清除
+                  </Button>
+                </div>
+
+                {scanFeedback && (
+                  <FeedbackNotice tone={scanFeedback.tone} message={scanFeedback.message} />
+                )}
+
+                {quickScanSuggestions.length > 0 && (
+                  <div className="space-y-3 rounded-[20px] border border-border/60 bg-muted/40 p-4">
+                    <p className="text-sm font-medium text-text-primary">快速帶入最近使用的卡片</p>
+                    <div className="flex flex-wrap gap-2">
+                      {quickScanSuggestions.map((log) => (
+                        <Button
+                          key={log.id}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setScanInput(log.rfid_uid)}
+                        >
+                          {log.user_name}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+        </div>
       </div>
       </div>
 
@@ -1054,7 +1516,7 @@ export const DoorControlPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>選擇模式切換時機</DialogTitle>
             <DialogDescription>
-              今天的首刷常開已經啟動。你可以立即更新規則，或等今日 {status?.schedule_lock_time} 上鎖後再切換。
+              今天的 {getWeekdayLabel(todayWeekdayKey)} 規則已經進入常開。你可以立即更新今日有效規則，或等今日 {status?.schedule_lock_time} 上鎖後再套用新的星期設定。
             </DialogDescription>
           </DialogHeader>
           <DialogBody scrollFade={false} className="space-y-4">
@@ -1063,17 +1525,19 @@ export const DoorControlPage: React.FC = () => {
               <p className="mt-2 break-words text-base font-semibold text-text-primary">
                 {getAccessModeLabel(status?.access_mode)}
               </p>
+              <p className="mt-2 break-words text-sm leading-6 text-text-secondary">目前來自：{todaySourceLabel}</p>
             </div>
 
             <div className="rounded-[20px] border border-accent/12 bg-accent/[0.06] p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">切換目標</p>
               <p className="mt-2 break-words text-base font-semibold text-text-primary">
-                {getAccessModeLabel(modeForm)}
+                {getAccessModeLabel(nextEffectiveMode)}
               </p>
+              <p className="mt-2 break-words text-sm leading-6 text-text-secondary">套用後來自：{nextSourceLabel}</p>
             </div>
 
             <p className="text-sm leading-6 text-text-secondary">
-              不論你選哪一種，門都會維持解鎖到今日 {status?.schedule_lock_time}。差別只在於模式要現在更新，還是等收門後再接手。
+              不論你選哪一種，門都會維持解鎖到今日 {status?.schedule_lock_time}。差別只在於今天的有效規則要現在更新，還是等收門後再由新的預設模式與星期別規則接手。
             </p>
           </DialogBody>
           <DialogFooter className="sm:flex-col sm:items-stretch lg:flex-row lg:items-center">

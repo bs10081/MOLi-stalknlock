@@ -11,14 +11,15 @@ from app.database import get_db, User, Card, Admin, AccessLog, DoorEvent, genera
 from app.routers.dependencies import get_current_admin
 from app.services.card_uid import CardUIDNormalizationError, normalize_card_uid_input
 from app.services.door_mode import (
-    MODE_ALWAYS_LOCKED,
-    MODE_FIRST_SCAN_FLEX,
-    MODE_FIRST_SCAN_HOLD,
     MODE_NORMAL,
     can_defer_mode_switch,
     get_access_mode_label,
-    is_schedule_access_mode,
+    get_weekday_label,
+    normalize_access_mode,
+    normalize_weekday_mode_overrides,
+    resolve_effective_access_mode,
     serialize_door_settings,
+    serialize_weekday_mode_overrides,
     sync_door_hardware_state,
     validate_schedule_config,
 )
@@ -64,26 +65,45 @@ def _build_door_status_payload(db: Session) -> dict:
     return status
 
 
-def _describe_door_mode(access_mode: str, daily_lock_time: str, first_unlock_time: str) -> str:
-    if access_mode == MODE_ALWAYS_LOCKED:
-        return "門禁已切換為永久上鎖模式。"
-    if access_mode == MODE_FIRST_SCAN_HOLD:
-        return (
-            f"門禁已設定為每日 {daily_lock_time} 上鎖，"
-            f"{first_unlock_time} 後首張有效卡會維持解鎖，時段外禁止刷卡。"
-        )
-    if access_mode == MODE_FIRST_SCAN_FLEX:
-        return (
-            f"門禁已設定為每日 {daily_lock_time} 上鎖，"
-            f"{first_unlock_time} 後首張有效卡會維持解鎖，時段外仍可一般通行。"
-        )
-    return "門禁已恢復為一般刷卡開門模式。"
+def _get_mode_source_label(active_mode_source: str, weekday_key: str) -> str:
+    if active_mode_source == "weekday_override":
+        return f"{get_weekday_label(weekday_key)}規則"
+    return "預設模式"
 
 
-def _describe_scheduled_mode_change(next_access_mode: str, daily_lock_time: str) -> str:
+def _count_weekday_overrides(weekday_mode_overrides: dict[str, str | None]) -> int:
+    return sum(1 for mode in weekday_mode_overrides.values() if mode is not None)
+
+
+def _describe_door_mode(
+    default_access_mode: str,
+    effective_access_mode: str,
+    active_mode_source: str,
+    weekday_key: str,
+    daily_lock_time: str,
+    first_unlock_time: str,
+    weekday_mode_overrides: dict[str, str | None],
+) -> str:
+    override_count = _count_weekday_overrides(weekday_mode_overrides)
     return (
-        f"門禁將於今日 {daily_lock_time} 上鎖後，切換為"
-        f"{get_access_mode_label(next_access_mode)}。"
+        f"已更新門禁規則：預設模式 {get_access_mode_label(default_access_mode)}；"
+        f"今日依 {_get_mode_source_label(active_mode_source, weekday_key)} 生效為 {get_access_mode_label(effective_access_mode)}；"
+        f"星期別覆蓋 {override_count} 天；共用時段 {first_unlock_time}-{daily_lock_time}。"
+    )
+
+
+def _describe_scheduled_mode_change(
+    current_access_mode: str,
+    current_active_mode_source: str,
+    next_access_mode: str,
+    next_active_mode_source: str,
+    weekday_key: str,
+    daily_lock_time: str,
+) -> str:
+    return (
+        f"今日已常開，門禁將於 {daily_lock_time} 上鎖後，"
+        f"把 {_get_mode_source_label(current_active_mode_source, weekday_key)} 的 {get_access_mode_label(current_access_mode)} "
+        f"切換為 {_get_mode_source_label(next_active_mode_source, weekday_key)} 的 {get_access_mode_label(next_access_mode)}。"
     )
 
 @router.get("/users")
@@ -630,6 +650,7 @@ async def remote_unlock(
 @router.put("/door/settings")
 async def update_door_settings(
     access_mode: str = Form(...),
+    weekday_mode_overrides: Optional[str] = Form(None),
     daily_lock_time: Optional[str] = Form(None),
     first_unlock_time: Optional[str] = Form(None),
     apply_timing: str = Form(APPLY_TIMING_IMMEDIATE),
@@ -640,10 +661,13 @@ async def update_door_settings(
     """更新門禁模式與每日首刷常開排程。"""
     current_admin = get_current_admin(admin_token)
 
-    if access_mode not in {MODE_NORMAL, MODE_ALWAYS_LOCKED, MODE_FIRST_SCAN_HOLD, MODE_FIRST_SCAN_FLEX}:
-        raise HTTPException(400, "不支援的門禁模式")
     if apply_timing not in {APPLY_TIMING_IMMEDIATE, APPLY_TIMING_NEXT_CYCLE}:
         raise HTTPException(400, "不支援的套用時機")
+
+    try:
+        normalized_access_mode = normalize_access_mode(access_mode) or MODE_NORMAL
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
     try:
         normalized_daily_lock_time, normalized_first_unlock_time = validate_schedule_config(
@@ -654,41 +678,70 @@ async def update_door_settings(
         raise HTTPException(400, str(exc)) from exc
 
     settings, evaluation, _ = sync_door_hardware_state(db)
+    now_local = evaluation.now_local
     current_daily_lock_time = settings.daily_lock_time or normalized_daily_lock_time
     current_first_unlock_time = settings.first_unlock_time or normalized_first_unlock_time
+    current_effective_access_mode = evaluation.effective_access_mode
+
+    try:
+        normalized_weekday_mode_overrides = (
+            normalize_weekday_mode_overrides(weekday_mode_overrides)
+            if weekday_mode_overrides is not None
+            else normalize_weekday_mode_overrides(settings.weekday_mode_overrides)
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    next_mode_resolution = resolve_effective_access_mode(
+        settings,
+        now_local,
+        default_access_mode=normalized_access_mode,
+        weekday_mode_overrides=normalized_weekday_mode_overrides,
+    )
+    next_effective_access_mode = next_mode_resolution.access_mode
 
     if apply_timing == APPLY_TIMING_NEXT_CYCLE:
         if not can_defer_mode_switch(
-            settings.access_mode,
-            access_mode,
+            current_effective_access_mode,
+            next_effective_access_mode,
             evaluation.phase,
             current_daily_lock_time,
             current_first_unlock_time,
             normalized_daily_lock_time,
             normalized_first_unlock_time,
-        ):
+        ) or current_effective_access_mode == next_effective_access_mode:
             raise HTTPException(
                 400,
                 "只有在今日已常開、且僅於兩種首刷常開模式間切換時，才能改為今日上鎖後生效。",
             )
 
-        settings.pending_access_mode = access_mode
-        description = _describe_scheduled_mode_change(access_mode, current_daily_lock_time)
+        settings.pending_access_mode = normalized_access_mode
+        settings.pending_weekday_mode_overrides = serialize_weekday_mode_overrides(normalized_weekday_mode_overrides)
+        description = _describe_scheduled_mode_change(
+            current_effective_access_mode,
+            evaluation.active_mode_source,
+            next_effective_access_mode,
+            next_mode_resolution.active_mode_source,
+            evaluation.weekday_key,
+            current_daily_lock_time,
+        )
         event_action = "door_settings_scheduled"
     else:
-        settings.access_mode = access_mode
+        settings.access_mode = normalized_access_mode
+        settings.weekday_mode_overrides = serialize_weekday_mode_overrides(normalized_weekday_mode_overrides)
         settings.pending_access_mode = None
+        settings.pending_weekday_mode_overrides = None
         settings.daily_lock_time = normalized_daily_lock_time
         settings.first_unlock_time = normalized_first_unlock_time
 
-        if not is_schedule_access_mode(access_mode):
-            settings.schedule_hold_date = None
-            settings.schedule_hold_started_at = None
-
         description = _describe_door_mode(
-            settings.access_mode,
+            next_mode_resolution.default_access_mode,
+            next_mode_resolution.access_mode,
+            next_mode_resolution.active_mode_source,
+            next_mode_resolution.weekday_key,
             settings.daily_lock_time,
             settings.first_unlock_time,
+            normalized_weekday_mode_overrides,
         )
         event_action = "door_settings_updated"
 

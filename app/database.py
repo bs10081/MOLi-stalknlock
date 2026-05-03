@@ -12,6 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
+import json
 import uuid
 
 from app.config import DATABASE_URL
@@ -22,6 +23,20 @@ Base = declarative_base()
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+
+DEFAULT_WEEKDAY_MODE_OVERRIDES_JSON = json.dumps(
+    {
+        "mon": None,
+        "tue": None,
+        "wed": None,
+        "thu": None,
+        "fri": None,
+        "sat": None,
+        "sun": None,
+    },
+    separators=(",", ":"),
+)
 
 class User(Base):
     __tablename__ = "users"
@@ -78,6 +93,8 @@ class DoorControlSettings(Base):
     id = Column(Integer, primary_key=True, default=1)
     access_mode = Column(String(20), nullable=False, default="normal")
     pending_access_mode = Column(String(20), nullable=True)
+    weekday_mode_overrides = Column(String, nullable=True, default=DEFAULT_WEEKDAY_MODE_OVERRIDES_JSON)
+    pending_weekday_mode_overrides = Column(String, nullable=True)
     daily_lock_time = Column(String(5), nullable=True)
     first_unlock_time = Column(String(5), nullable=True)
     schedule_hold_date = Column(String(10), nullable=True)
@@ -139,4 +156,17 @@ def _ensure_runtime_columns():
             with engine.begin() as connection:
                 connection.execute(
                     text("ALTER TABLE door_control_settings ADD COLUMN pending_access_mode VARCHAR(20)")
+                )
+            column_names.add("pending_access_mode")
+        if "weekday_mode_overrides" not in column_names:
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "ALTER TABLE door_control_settings "
+                    f"ADD COLUMN weekday_mode_overrides TEXT DEFAULT '{DEFAULT_WEEKDAY_MODE_OVERRIDES_JSON}'"
+                )
+            column_names.add("weekday_mode_overrides")
+        if "pending_weekday_mode_overrides" not in column_names:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE door_control_settings ADD COLUMN pending_weekday_mode_overrides TEXT")
                 )

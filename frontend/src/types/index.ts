@@ -37,6 +37,9 @@ export interface AccessLog {
 
 export type DoorAccessMode = 'normal' | 'always_locked' | 'first_scan_hold' | 'first_scan_flex'
 export type DoorSchedulePhase = 'inactive' | 'outside_schedule' | 'waiting_for_first_scan' | 'held_open'
+export type DoorWeekdayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+export type DoorWeekdayModeOverrides = Record<DoorWeekdayKey, DoorAccessMode | null>
+export type DoorActiveModeSource = 'default' | 'weekday_override'
 
 export interface DoorStatus {
   door_state: 'locked' | 'unlocking' | 'held_open'
@@ -57,7 +60,11 @@ export interface DoorStatus {
   last_remote_unlock_by?: string | null
   remote_unlock_count: number
   access_mode: DoorAccessMode
+  default_access_mode: DoorAccessMode
   pending_access_mode?: DoorAccessMode | null
+  weekday_mode_overrides: DoorWeekdayModeOverrides
+  pending_weekday_mode_overrides?: DoorWeekdayModeOverrides | null
+  active_mode_source: DoorActiveModeSource
   schedule_lock_time: string
   schedule_first_unlock_time: string
   schedule_phase: DoorSchedulePhase

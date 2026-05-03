@@ -33,6 +33,7 @@ from app.services.door_mode import (
     activate_schedule_hold,
     get_access_mode_label,
     get_card_access_decision,
+    get_weekday_label,
     is_schedule_access_mode,
     sync_door_hardware_state,
 )
@@ -67,6 +68,11 @@ async def door_mode_heartbeat():
                 previous_access_mode = sync_result.get("previous_access_mode")
 
                 if applied_pending_mode:
+                    source_label = (
+                        f"{get_weekday_label(evaluation.weekday_key)}規則"
+                        if evaluation.active_mode_source == "weekday_override"
+                        else "預設模式"
+                    )
                     db.add(DoorEvent(
                         admin_id=None,
                         admin_name="系統自動化",
@@ -74,8 +80,8 @@ async def door_mode_heartbeat():
                         source="door_scheduler",
                         result="accepted",
                         description=(
-                            f"已到每日上鎖時間，門禁模式已切換為"
-                            f"{get_access_mode_label(applied_pending_mode)}。"
+                            f"已到每日上鎖時間，今日門禁已切換為 "
+                            f"{source_label} 的 {get_access_mode_label(applied_pending_mode)}。"
                         ),
                     ))
                     db.commit()
@@ -91,7 +97,7 @@ async def door_mode_heartbeat():
                     db.commit()
 
                 if hardware_action == "force_lock" and not applied_pending_mode:
-                    if settings.access_mode == MODE_ALWAYS_LOCKED:
+                    if evaluation.effective_access_mode == MODE_ALWAYS_LOCKED:
                         db.add(DoorEvent(
                             admin_id=None,
                             admin_name="系統自動化",
@@ -163,14 +169,15 @@ async def handle_normal_mode(card_uid: str, db: Session, card: Optional[Card] = 
     log.info(f"✅ Access granted: {user_name} ({student_id}){card_info}")
 
     settings, schedule_evaluation, _ = sync_door_hardware_state(db)
+    effective_access_mode = schedule_evaluation.effective_access_mode
     access_note = ""
 
-    access_decision = get_card_access_decision(settings.access_mode, schedule_evaluation.phase)
+    access_decision = get_card_access_decision(effective_access_mode, schedule_evaluation.phase)
 
     if access_decision == ACCESS_DECISION_DENY:
-        if settings.access_mode == MODE_ALWAYS_LOCKED:
+        if effective_access_mode == MODE_ALWAYS_LOCKED:
             log.warning(f"⚠️ Access denied by always-locked mode: {user_name} ({student_id})")
-        elif settings.access_mode == MODE_FIRST_SCAN_HOLD and schedule_evaluation.phase == SCHEDULE_PHASE_OUTSIDE_SCHEDULE:
+        elif effective_access_mode == MODE_FIRST_SCAN_HOLD and schedule_evaluation.phase == SCHEDULE_PHASE_OUTSIDE_SCHEDULE:
             log.warning(f"⚠️ Access denied outside schedule window: {user_name} ({student_id})")
         else:
             log.warning(f"⚠️ Access denied by access mode policy: {user_name} ({student_id})")
@@ -261,7 +268,10 @@ async def handle_register_mode(card_uid: str, db: Session, session):
         log.info(f"🎉 Card bound: {user.student_id} -> {card_uid} (總共 {card_count} 張卡片)")
 
         settings, schedule_evaluation, _ = sync_door_hardware_state(db)
-        access_decision = get_card_access_decision(settings.access_mode, schedule_evaluation.phase)
+        access_decision = get_card_access_decision(
+            schedule_evaluation.effective_access_mode,
+            schedule_evaluation.phase,
+        )
         if access_decision not in {ACCESS_DECISION_DENY, ACCESS_DECISION_HELD_OPEN}:
             asyncio.create_task(asyncio.to_thread(open_lock))
         asyncio.create_task(asyncio.to_thread(
