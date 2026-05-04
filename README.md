@@ -90,8 +90,19 @@ ssh moli-door "cd /home/pi/Host/MOLi-stalknlock && docker compose pull && docker
 
 repo 內已提供 GitHub Actions workflow：
 
-- Pull Request / Push：先驗證 Python 測試與前端 build
+- Pull Request / Push：先安裝 `requirements-dev.txt`，再驗證 `tests/test_card_uid.py`、`tests/test_door_mode.py` 與前端 build
 - Push 到 `main` / `v*` tag / `workflow_dispatch`：自動建置 `linux/arm64` image，推送到 Docker Hub
+
+如果要在本機重跑同一套後端檢查，請先建立 Python 開發環境並安裝：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+export JWT_SECRET_KEY=test-secret-for-local-tests-0123456789abcdef
+python -m unittest tests/test_card_uid.py
+python -m unittest tests/test_door_mode.py
+```
 
 請先在 GitHub repository secrets 中設定：
 

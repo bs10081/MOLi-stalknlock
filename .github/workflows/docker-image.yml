@@ -40,7 +40,11 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run backend tests
-        run: python -m unittest tests/test_card_uid.py
+        env:
+          JWT_SECRET_KEY: test-secret-for-ci-0123456789abcdef
+        run: |
+          python -m unittest tests/test_card_uid.py
+          python -m unittest tests/test_door_mode.py
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
